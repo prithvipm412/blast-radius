@@ -1,7 +1,11 @@
 # api/ — owner: lead
 
-Not built yet — next task after this skeleton. Will contain:
+`main.py` — FastAPI app implementing every endpoint in `contracts/api.md`:
 
-- FastAPI app exposing exactly the endpoints in `contracts/api.md`: `POST /api/ask`, `POST /api/alert` (both SSE via `sse-starlette`), `GET /api/graph`, `GET /api/stats`, `POST /api/sync`.
-- Wires `agent/` (the LLM loop) and `graph/tools` / `ingest/sync` together behind those endpoints.
-- CORS configured for the Next.js dev server in `web/`.
+- `POST /api/ask`, `POST /api/alert` — SSE (`sse_starlette`), streaming `agent.loop`'s `run_ask`/`run_alert` generators straight through.
+- `GET /api/graph`, `GET /api/stats` — backed by `agent.registry.graph_neighborhood`/`graph_stats`.
+- `POST /api/sync` — calls `ingest.sync.sync()`; returns `501` until `ingest/` lands that module on `main`.
+
+CORS is restricted to `http://localhost:3000` (the Next.js dev server).
+
+Run: `uvicorn api.main:app --reload --port 8000`
