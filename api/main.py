@@ -29,13 +29,15 @@ app = FastAPI(title="Blast Radius API")
 # Comma-separated, e.g. "https://blast-radius.vercel.app,http://localhost:3001". Falls back
 # to the local dev ports so `uvicorn api.main:app` keeps working out of the box.
 _cors_origins = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
     if origin.strip()
 ]
+logger.info("CORS allow_origins=%s", _cors_origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
+    allow_origin_regex=r"https://blast-radius-.*\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
 )
