@@ -76,6 +76,8 @@ Fetch a neighborhood of the graph for visualization, independent of any agent ru
 ```
 Same node/edge shape as the `path` field in `contracts/tools.md` — the frontend should be able to reuse one rendering component for both.
 
+This endpoint never returns the `SyncMeta` node or any `operational: true` node/edge — see `contracts/schema.md`'s "Operational metadata" section. There is exactly one such node today (`meta:sync`); it's bookkeeping, not something to visualize.
+
 ---
 
 ## `GET /api/stats`
@@ -92,6 +94,7 @@ Quick counts for a dashboard header.
   "last_synced_at": "2024-10-17T10:00:00Z"
 }
 ```
+`nodes_by_label`, `synthetic_node_count`, and `real_node_count` exclude operational nodes (`SyncMeta`) — same rule as `GET /api/graph` above. `last_synced_at` is read directly from the `SyncMeta` node's (`id: "meta:sync"`) `last_synced_at` property, written by `ingest.sync()` (via `graph/writer.py`'s `set_sync_meta()`, see `contracts/schema.md`); it is `null` if `/api/sync` has never run.
 
 ---
 
