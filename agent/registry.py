@@ -613,15 +613,83 @@ if _BACKEND == "stub":
         }
 
 else:
-    # graph.tools is live: these two API-only helpers aren't part of contracts/tools.md,
-    # so graph.tools won't define them. Fall back to a trivial implementation until
-    # the lead adds real equivalents backed by graph/ (e.g. via graph.client) -
-    # ask the human to relay a contract addition if api/ needs these to be real.
+    # graph.tools is live. These two API-only helpers aren't part of contracts/tools.md's
+    # 11 agent tools, so graph.tools doesn't define them - read directly via graph.db/
+    # graph.evidence instead, reusing the same operational-node filtering and node/edge
+    # rendering graph/tools.py's own queries rely on.
     def graph_neighborhood(focus: str | None = None, depth: int = 2, cap: int = 500) -> dict:
-        raise NotImplementedError("graph_neighborhood has no graph.tools-backed implementation yet")
+        from graph.db import get_graph
+        from graph.evidence import Evidence
+
+        g = get_graph()
+        evidence = Evidence()
+        if focus is None:
+            # cap bounds the rendered node count itself, not a seed set to expand from -
+            # take the first `cap` nodes, then only edges strictly within that set.
+            nodes = g.query(
+                "MATCH (n) WHERE coalesce(n.operational, false) = false "
+                "RETURN n ORDER BY n.id LIMIT $cap",
+                {"cap": cap},
+            ).result_set
+            prop_ids = [n.properties["id"] for (n,) in nodes]
+            for (n,) in nodes:
+                evidence.add(n)
+            edges = g.query(
+                "MATCH (n)-[r]->(m) WHERE coalesce(r.operational, false) = false "
+                "AND n.id IN $ids AND m.id IN $ids RETURN r",
+                {"ids": prop_ids},
+            ).result_set
+            for (r,) in edges:
+                evidence.add(r)
+            return evidence.render()
+
+        # Variable-length relationship bounds must be literal ints in Cypher, not params.
+        safe_depth = max(0, min(depth, 4))
+        rows = g.query(
+            f"MATCH (focus {{id: $focus}}) "
+            f"OPTIONAL MATCH path=(focus)-[*0..{safe_depth}]-(other) "
+            "RETURN DISTINCT other, path LIMIT $cap",
+            {"focus": focus, "cap": cap},
+        ).result_set
+        if not rows:
+            raise ValueError(f"unknown node: {focus}")
+        for _, path in rows:
+            if path is not None:
+                evidence.add(path)
+        return evidence.render()
 
     def graph_stats() -> dict:
-        raise NotImplementedError("graph_stats has no graph.tools-backed implementation yet")
+        from graph.db import get_graph
+
+        g = get_graph()
+        nodes_by_label = dict(
+            g.query(
+                "MATCH (n) WHERE coalesce(n.operational, false) = false "
+                "RETURN labels(n)[0], count(n)",
+                {},
+            ).result_set
+        )
+        edges_by_type = dict(
+            g.query(
+                "MATCH ()-[r]->() WHERE coalesce(r.operational, false) = false "
+                "RETURN type(r), count(r)",
+                {},
+            ).result_set
+        )
+        synthetic_count, real_count = g.query(
+            "MATCH (n) WHERE coalesce(n.operational, false) = false "
+            "RETURN sum(CASE WHEN n.synthetic THEN 1 ELSE 0 END), "
+            "sum(CASE WHEN n.synthetic THEN 0 ELSE 1 END)",
+            {},
+        ).result_set[0]
+        meta = g.query("MATCH (m:SyncMeta {id: 'meta:sync'}) RETURN m.last_synced_at", {}).result_set
+        return {
+            "nodes_by_label": nodes_by_label,
+            "edges_by_type": edges_by_type,
+            "synthetic_node_count": int(synthetic_count or 0),
+            "real_node_count": int(real_count or 0),
+            "last_synced_at": meta[0][0] if meta else None,
+        }
 
 
 TOOL_REGISTRY: dict[str, Callable[..., dict]] = {
