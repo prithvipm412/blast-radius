@@ -23,6 +23,9 @@ dev = [
     "ruff>=0.6",
 ]
 
+[tool.setuptools]
+packages = ["agent", "api", "graph", "ingest"]
+
 [tool.ruff]
 line-length = 100
 
