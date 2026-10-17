@@ -1,0 +1,24 @@
+{
+  "source_url": "https://github.com/GoogleCloudPlatform/microservices-demo",
+  "services": [
+    {"name":"frontend","language":"Go","description":"Serves the web storefront."},
+    {"name":"productcatalogservice","language":"Go","description":"Provides the product catalog."},
+    {"name":"currencyservice","language":"Node.js","description":"Converts monetary amounts between currencies."},
+    {"name":"cartservice","language":"C#","description":"Stores shopping carts in Redis."},
+    {"name":"recommendationservice","language":"Python","description":"Recommends products based on cart contents."},
+    {"name":"shippingservice","language":"Go","description":"Calculates shipping costs and ships orders."},
+    {"name":"checkoutservice","language":"Go","description":"Coordinates order checkout."},
+    {"name":"adservice","language":"Java","description":"Serves contextual advertisements."},
+    {"name":"paymentservice","language":"Node.js","description":"Processes payment requests."},
+    {"name":"emailservice","language":"Python","description":"Sends order confirmation emails."},
+    {"name":"loadgenerator","language":"Python","description":"Simulates storefront traffic."},
+    {"name":"redis-cart","language":"C","description":"Redis storage dependency for shopping carts."}
+  ],
+  "dependencies": {
+    "frontend":["productcatalogservice","currencyservice","cartservice","recommendationservice","shippingservice","checkoutservice","adservice"],
+    "checkoutservice":["productcatalogservice","shippingservice","paymentservice","emailservice","currencyservice","cartservice"],
+    "recommendationservice":["productcatalogservice"],
+    "cartservice":["redis-cart"],
+    "loadgenerator":["frontend"]
+  }
+}

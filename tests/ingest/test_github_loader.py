@@ -62,6 +62,10 @@ def test_incremental_refreshes_details_and_files(tmp_path):
     def handler(request):
         requests.append(request)
         path = request.url.path
+        if path == '/graphql':
+            return httpx.Response(200, json={'data': {'repository': {'issue': {
+                'closedByPullRequestsReferences': {'nodes': [], 'pageInfo': {'hasNextPage': False}}
+            }}}})
         if path.endswith("/issues"):
             return httpx.Response(200, json=[{"number": 1, "pull_request": {}}, {"number": 2}])
         if path.endswith("/pulls/1"):
@@ -72,5 +76,5 @@ def test_incremental_refreshes_details_and_files(tmp_path):
     for _ in range(2):
         result = client.updated("2026-01-01T00:00:00Z")
         assert len(result["pulls"]) == len(result["issues"]) == 1
-    assert len(requests) == 8
+    assert len(requests) == 10
     assert requests[0].url.params["since"] == "2026-01-01T00:00:00Z"

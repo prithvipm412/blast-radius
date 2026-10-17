@@ -1,0 +1,266 @@
+{
+  "provenance": "All narratives and team assignments in this file are synthetic; real PRs are artifacts only.",
+  "teams": [
+    {
+      "slug": "storefront",
+      "name": "Storefront",
+      "pager_channel": "#pager-storefront",
+      "services": [
+        "frontend",
+        "adservice",
+        "loadgenerator"
+      ]
+    },
+    {
+      "slug": "commerce",
+      "name": "Commerce",
+      "pager_channel": "#pager-commerce",
+      "services": [
+        "checkoutservice",
+        "paymentservice",
+        "currencyservice"
+      ]
+    },
+    {
+      "slug": "cart",
+      "name": "Cart Platform",
+      "pager_channel": "#pager-cart",
+      "services": [
+        "cartservice",
+        "redis-cart"
+      ]
+    },
+    {
+      "slug": "discovery",
+      "name": "Product Discovery",
+      "pager_channel": "#pager-discovery",
+      "services": [
+        "productcatalogservice",
+        "recommendationservice"
+      ]
+    },
+    {
+      "slug": "fulfillment",
+      "name": "Fulfillment",
+      "pager_channel": "#pager-fulfillment",
+      "services": [
+        "shippingservice",
+        "emailservice"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "slug": "cart-redis",
+      "service": "cartservice",
+      "name": "Cart storage uses Redis without replication",
+      "context": "Explore the failure domain of a single cart storage dependency."
+    },
+    {
+      "slug": "checkout-sync",
+      "service": "checkoutservice",
+      "name": "Checkout coordinates synchronous service calls",
+      "context": "Trade simple orchestration against cascading failure risk."
+    },
+    {
+      "slug": "catalog-cache",
+      "service": "productcatalogservice",
+      "name": "Use bounded catalog caching",
+      "context": "Balance catalog freshness against dependency load."
+    },
+    {
+      "slug": "currency-fallback",
+      "service": "currencyservice",
+      "name": "Keep a last-known currency rate snapshot",
+      "context": "Evaluate a fallback for conversion outages."
+    },
+    {
+      "slug": "recommendation-timeout",
+      "service": "recommendationservice",
+      "name": "Bound recommendation request time",
+      "context": "Limit optional recommendation latency."
+    },
+    {
+      "slug": "shipping-budget",
+      "service": "shippingservice",
+      "name": "Budget shipping quote latency",
+      "context": "Protect checkout latency when quotes slow down."
+    },
+    {
+      "slug": "frontend-degrade",
+      "service": "frontend",
+      "name": "Degrade optional storefront components",
+      "context": "Preserve core browsing during optional service failures."
+    },
+    {
+      "slug": "email-retry",
+      "service": "emailservice",
+      "name": "Retry confirmation delivery with a bound",
+      "context": "Prevent repeated delivery attempts from exhausting capacity."
+    }
+  ],
+  "incidents": [
+    {
+      "slug": "inc-001",
+      "name": "Demo: Cart storage latency 1",
+      "service": "cartservice",
+      "summary": "Redis request latency exhausted cart request deadlines.",
+      "severity": "sev1",
+      "days_ago": 7,
+      "duration_minutes": 30
+    },
+    {
+      "slug": "inc-002",
+      "name": "Demo: Checkout saturation 2",
+      "service": "checkoutservice",
+      "summary": "A simulated checkout burst exceeded worker capacity.",
+      "severity": "sev2",
+      "days_ago": 27,
+      "duration_minutes": 45
+    },
+    {
+      "slug": "inc-003",
+      "name": "Demo: Catalog lookup timeout 3",
+      "service": "productcatalogservice",
+      "summary": "Catalog reads exceeded the simulated timeout budget.",
+      "severity": "sev3",
+      "days_ago": 47,
+      "duration_minutes": 60
+    },
+    {
+      "slug": "inc-004",
+      "name": "Demo: Currency conversion unavailable 4",
+      "service": "currencyservice",
+      "summary": "A simulated rate lookup failure interrupted conversions.",
+      "severity": "sev4",
+      "days_ago": 67,
+      "duration_minutes": 75
+    },
+    {
+      "slug": "inc-005",
+      "name": "Demo: Shipping quote delay 5",
+      "service": "shippingservice",
+      "summary": "Quote requests exceeded the simulated latency budget.",
+      "severity": "sev1",
+      "days_ago": 87,
+      "duration_minutes": 90
+    },
+    {
+      "slug": "inc-006",
+      "name": "Demo: Payment retry storm 6",
+      "service": "paymentservice",
+      "summary": "Simulated transient failures caused excess retries.",
+      "severity": "sev2",
+      "days_ago": 107,
+      "duration_minutes": 105
+    },
+    {
+      "slug": "inc-007",
+      "name": "Demo: Confirmation delivery backlog 7",
+      "service": "emailservice",
+      "summary": "Simulated delivery congestion delayed confirmations.",
+      "severity": "sev3",
+      "days_ago": 127,
+      "duration_minutes": 30
+    },
+    {
+      "slug": "inc-008",
+      "name": "Demo: Recommendation timeouts 8",
+      "service": "recommendationservice",
+      "summary": "Simulated recommendation calls exhausted the deadline.",
+      "severity": "sev4",
+      "days_ago": 147,
+      "duration_minutes": 45
+    },
+    {
+      "slug": "inc-009",
+      "name": "Demo: Storefront request overload 9",
+      "service": "frontend",
+      "summary": "A simulated request burst exhausted frontend workers.",
+      "severity": "sev1",
+      "days_ago": 167,
+      "duration_minutes": 60
+    },
+    {
+      "slug": "inc-010",
+      "name": "Demo: Advertising response delay 10",
+      "service": "adservice",
+      "summary": "Simulated advertisement requests exceeded deadlines.",
+      "severity": "sev2",
+      "days_ago": 187,
+      "duration_minutes": 75
+    },
+    {
+      "slug": "inc-011",
+      "name": "Demo: Cart storage latency 11",
+      "service": "cartservice",
+      "summary": "Redis request latency exhausted cart request deadlines.",
+      "severity": "sev3",
+      "days_ago": 207,
+      "duration_minutes": 90
+    },
+    {
+      "slug": "inc-012",
+      "name": "Demo: Checkout saturation 12",
+      "service": "checkoutservice",
+      "summary": "A simulated checkout burst exceeded worker capacity.",
+      "severity": "sev4",
+      "days_ago": 227,
+      "duration_minutes": 105
+    },
+    {
+      "slug": "inc-013",
+      "name": "Demo: Catalog lookup timeout 13",
+      "service": "productcatalogservice",
+      "summary": "Catalog reads exceeded the simulated timeout budget.",
+      "severity": "sev1",
+      "days_ago": 247,
+      "duration_minutes": 30
+    },
+    {
+      "slug": "inc-014",
+      "name": "Demo: Currency conversion unavailable 14",
+      "service": "currencyservice",
+      "summary": "A simulated rate lookup failure interrupted conversions.",
+      "severity": "sev2",
+      "days_ago": 267,
+      "duration_minutes": 45
+    },
+    {
+      "slug": "inc-015",
+      "name": "Demo: Shipping quote delay 15",
+      "service": "shippingservice",
+      "summary": "Quote requests exceeded the simulated latency budget.",
+      "severity": "sev3",
+      "days_ago": 287,
+      "duration_minutes": 60
+    },
+    {
+      "slug": "inc-016",
+      "name": "Demo: Payment retry storm 16",
+      "service": "paymentservice",
+      "summary": "Simulated transient failures caused excess retries.",
+      "severity": "sev4",
+      "days_ago": 307,
+      "duration_minutes": 75
+    },
+    {
+      "slug": "inc-017",
+      "name": "Demo: Confirmation delivery backlog 17",
+      "service": "emailservice",
+      "summary": "Simulated delivery congestion delayed confirmations.",
+      "severity": "sev1",
+      "days_ago": 327,
+      "duration_minutes": 90
+    },
+    {
+      "slug": "inc-018",
+      "name": "Demo: Recommendation timeouts 18",
+      "service": "recommendationservice",
+      "summary": "Simulated recommendation calls exhausted the deadline.",
+      "severity": "sev2",
+      "days_ago": 347,
+      "duration_minutes": 105
+    }
+  ]
+}
