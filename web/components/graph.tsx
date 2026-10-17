@@ -18,6 +18,20 @@ export default function Network({graph,highlight,failing,depths,emphasize,busy,o
  const positions=useRef(new Map<string,N>());const labelBoxes=useRef<Box[]>([]);
  const data=useMemo(()=>({nodes:graph.nodes.map(n=>{const node=Object.assign(positions.current.get(n.id)||{},n) as N;positions.current.set(n.id,node);return node;}),links:graph.edges.map(e=>({...e}))}),[graph]);
  const selected=useMemo(()=>new Set(highlight.nodes.map(n=>n.id)),[highlight]);const links=useMemo(()=>new Set(highlight.edges.map(e=>`${e.source}|${e.type}|${e.target}`)),[highlight]);
+ // PageRank-sized services: critical_services() stores a `criticality` score on Service
+ // nodes (absent until it's run at least once). Scale relative to whatever's on screen now,
+ // since the raw PageRank values are tiny and only meaningful by comparison.
+ const criticalityRange=useMemo(()=>{
+  const values=graph.nodes.filter(n=>n.label==='Service'&&typeof n.criticality==='number').map(n=>n.criticality as number);
+  return values.length?{min:Math.min(...values),max:Math.max(...values)}:null;
+ },[graph]);
+ const radiusFor=(node:N)=>{
+  if(node.label!=='Service')return 5;
+  if(!criticalityRange||typeof node.criticality!=='number')return 7;
+  const {min,max}=criticalityRange;
+  const t=max>min?(node.criticality-min)/(max-min):0.5;
+  return 6+t*6;
+ };
  useEffect(()=>{const observer=new ResizeObserver(([entry])=>setSize({width:entry.contentRect.width,height:entry.contentRect.height}));if(wrapper.current)observer.observe(wrapper.current);return()=>observer.disconnect();},[]);
  useEffect(()=>{start.current=Date.now();},[depths]);
  useEffect(()=>{const timer=setInterval(()=>setClock(Date.now()),45);return()=>clearInterval(timer);},[]);
@@ -27,8 +41,8 @@ export default function Network({graph,highlight,failing,depths,emphasize,busy,o
  // (resetKey), and once after the investigation finishes.
  useEffect(()=>{fg.current?.d3Force('charge')?.strength(-220);if(busy)return;const timer=setTimeout(()=>fg.current?.zoomToFit(650,80),500);return()=>clearTimeout(timer);},[data,resetKey,size.width,busy]);
  const activeLink=(l:L)=>links.has(`${id(l.source)}|${l.type}|${id(l.target)}`);
- return <div ref={wrapper} className="network-canvas" aria-label="Interactive dependency graph. Select a node to inspect its properties."><ForceGraph2D ref={fg} width={size.width} height={size.height} graphData={data} backgroundColor="transparent" nodeLabel={()=>''} cooldownTicks={100} enableNodeDrag onNodeClick={n=>onSelect(n)} onNodeHover={n=>setHovered(n?n.id as string:null)} onRenderFramePre={()=>{labelBoxes.current=[];}} linkColor={l=>activeLink(l)?'#60a5fa':selected.size?'#1a2b46':'#294361'} linkWidth={l=>activeLink(l)?1.8:0.7} linkLineDash={l=>l.synthetic?[3,4]:null} linkDirectionalArrowLength={l=>l.type==='DEPENDS_ON'?5:0} linkDirectionalArrowRelPos={0.8} linkDirectionalParticles={l=>activeLink(l)?3:0} linkDirectionalParticleWidth={2} linkDirectionalParticleSpeed={0.006} nodeCanvasObject={(node,ctx,scale)=>{
- const x=node.x||0,y=node.y||0;const isRoot=node.id===failing;const active=selected.has(node.id);const color=isRoot?'#ef4444':colors[node.label]||'#94a3b8';const radius=node.label==='Service'?7:5;const dim=selected.size>0&&!active&&!isRoot;ctx.globalAlpha=dim?0.25:1;
+ return <div ref={wrapper} className="network-canvas" aria-label="Interactive dependency graph. Select a node to inspect its properties."><ForceGraph2D ref={fg} width={size.width} height={size.height} graphData={data} backgroundColor="transparent" nodeLabel={()=>''} cooldownTicks={100} enableNodeDrag onNodeClick={n=>onSelect(n)} onNodeHover={n=>setHovered(n?n.id as string:null)} onRenderFramePre={()=>{labelBoxes.current=[];}} linkColor={l=>activeLink(l)?'#60a5fa':selected.size?'#2a4571':'#3d6090'} linkWidth={l=>activeLink(l)?1.8:0.9} linkLineDash={l=>l.synthetic?[3,4]:null} linkDirectionalArrowLength={l=>l.type==='DEPENDS_ON'?5:0} linkDirectionalArrowRelPos={0.8} linkDirectionalParticles={l=>activeLink(l)?3:0} linkDirectionalParticleWidth={2} linkDirectionalParticleSpeed={0.006} nodeCanvasObject={(node,ctx,scale)=>{
+ const x=node.x||0,y=node.y||0;const isRoot=node.id===failing;const active=selected.has(node.id);const color=isRoot?'#ef4444':colors[node.label]||'#94a3b8';const radius=radiusFor(node);const dim=selected.size>0&&!active&&!isRoot;ctx.globalAlpha=dim?0.25:1;
  const hop=depths[node.id];const elapsed=(clock-start.current)/1000;
  if(isRoot||active){ctx.beginPath();ctx.arc(x,y,radius+5,0,2*Math.PI);ctx.fillStyle=color+'18';ctx.fill();}
  if(isRoot||(hop!==undefined&&elapsed>hop*0.5&&elapsed<hop*0.5+3)){const phase=((clock/1400-(hop||0)*0.25)%1+1)%1;ctx.beginPath();ctx.arc(x,y,radius+phase*23,0,2*Math.PI);ctx.strokeStyle=color;ctx.globalAlpha=(1-phase)*0.65;ctx.lineWidth=1/scale;ctx.stroke();ctx.globalAlpha=1;}

@@ -23,6 +23,7 @@ Owner: **lead only** for this file. `graph/` (Codex 2) implements every function
 ```
 
 - `path.nodes` / `path.edges` must contain every node/edge actually touched by the query, deduplicated, in a form the frontend can drop straight into `react-force-graph-2d` (plus `label`/`type` and `synthetic` so the UI can style real vs. synthetic differently). If a tool call touches no graph data (e.g. a pure LLM step), it still returns the shape with empty `nodes`/`edges` lists and an empty/explanatory `cypher`.
+- A node in `path.nodes` also carries `criticality` (float) when it's a `Service` that `critical_services()` has scored — absent otherwise. The frontend uses it to size service nodes by structural importance; nothing else should rely on its presence.
 - If the underlying query errors, raise — don't swallow. The API layer (`api/`) is responsible for turning exceptions into `{"type": "error", ...}` SSE events.
 
 ## Module location

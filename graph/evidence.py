@@ -6,12 +6,18 @@ from falkordb.path import Path
 
 
 def node_dict(node):
-    return {
+    out = {
         "id": node.properties["id"],
         "label": node.labels[0],
         "name": node.properties["name"],
         "synthetic": node.properties["synthetic"],
     }
+    # Optional: only present once critical_services() has scored this Service node.
+    # The frontend uses it to size nodes by structural importance (PageRank).
+    criticality = node.properties.get("criticality")
+    if criticality is not None:
+        out["criticality"] = criticality
+    return out
 
 
 class Evidence:
