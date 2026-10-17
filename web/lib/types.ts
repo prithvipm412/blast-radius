@@ -7,7 +7,7 @@ export interface ToolData {
  search_entities: { matches: GraphNode[] };
  blast_radius: { root: string; affected: {id:string;name:string;depth:number;synthetic:boolean}[] };
  failure_path: { exists:boolean;hops:number|null;path_ids:string[] };
- find_owners: { team:{id:string;name:string};members:{id:string;name:string;github_login:string|null}[] };
+ find_owners: { team:{id:string;name:string}|null;members:{id:string;name:string;github_login:string|null}[];teams:{id:string;name:string;members:{id:string;name:string;github_login:string|null}[]}[] };
  find_experts: { experts:{id:string;name:string;pr_count:number;last_touched:string}[] };
  similar_incidents: { incidents:{id:string;name:string;severity:string;started_at:string;relation:string}[] };
  trace_decision: { decisions:{id:string;name:string;status:string;decided_at:string;cites_prs:string[]}[] };
