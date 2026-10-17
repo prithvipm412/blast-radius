@@ -1,0 +1,59 @@
+{
+  "_comment": "Small sample graph matching contracts/schema.md, for developing against before real ingest exists. ~15 nodes, a handful of each edge type.",
+  "nodes": [
+    {"label": "Repo", "id": "repo:GoogleCloudPlatform/microservices-demo", "name": "GoogleCloudPlatform/microservices-demo", "source_url": "https://github.com/GoogleCloudPlatform/microservices-demo", "synthetic": false, "default_branch": "main"},
+
+    {"label": "Service", "id": "svc:frontend", "name": "frontend", "source_url": "https://github.com/GoogleCloudPlatform/microservices-demo/tree/main/src/frontend", "synthetic": false, "language": "Go", "description": "Serves the web UI and calls backend services."},
+    {"label": "Service", "id": "svc:cartservice", "name": "cartservice", "source_url": "https://github.com/GoogleCloudPlatform/microservices-demo/tree/main/src/cartservice", "synthetic": false, "language": "C#", "description": "Stores items in a user's shopping cart."},
+    {"label": "Service", "id": "svc:checkoutservice", "name": "checkoutservice", "source_url": "https://github.com/GoogleCloudPlatform/microservices-demo/tree/main/src/checkoutservice", "synthetic": false, "language": "Go", "description": "Orchestrates the checkout process."},
+    {"label": "Service", "id": "svc:paymentservice", "name": "paymentservice", "source_url": "https://github.com/GoogleCloudPlatform/microservices-demo/tree/main/src/paymentservice", "synthetic": false, "language": "Node.js", "description": "Charges a credit card (mock)."},
+    {"label": "Service", "id": "svc:productcatalogservice", "name": "productcatalogservice", "source_url": "https://github.com/GoogleCloudPlatform/microservices-demo/tree/main/src/productcatalogservice", "synthetic": false, "language": "Go", "description": "Provides product listings and search."},
+
+    {"label": "File", "id": "file:src/cartservice/src/CartService.cs", "name": "CartService.cs", "source_url": "https://github.com/GoogleCloudPlatform/microservices-demo/blob/main/src/cartservice/src/CartService.cs", "synthetic": false, "path": "src/cartservice/src/CartService.cs"},
+
+    {"label": "Person", "id": "person:alice", "name": "Alice Nguyen", "source_url": "https://github.com/alice", "synthetic": false, "github_login": "alice", "role": "backend engineer"},
+    {"label": "Person", "id": "person:bob", "name": "Bob Martins", "source_url": "https://github.com/bob", "synthetic": false, "github_login": "bob", "role": "SRE"},
+
+    {"label": "PR", "id": "pr:234", "name": "Fix cart service race condition on concurrent add", "source_url": "https://github.com/GoogleCloudPlatform/microservices-demo/pull/234", "synthetic": false, "number": 234, "merged_at": "2024-05-01T12:00:00Z", "body": "Fixes a race condition when two requests add to the same cart simultaneously."},
+
+    {"label": "Issue", "id": "issue:198", "name": "Cart items occasionally duplicated", "source_url": "https://github.com/GoogleCloudPlatform/microservices-demo/issues/198", "synthetic": false, "number": 198, "state": "closed", "body": "Users report duplicated items in cart under load."},
+
+    {"label": "Team", "id": "team:payments", "name": "Payments", "source_url": "synthetic", "synthetic": true, "pager_channel": "#pager-payments"},
+
+    {"label": "Incident", "id": "incident:inc-003", "name": "Cart service latency spike", "source_url": "synthetic", "synthetic": true, "summary": "cartservice p99 latency spiked to 4s during a flash sale, cascading to checkoutservice timeouts.", "severity": "sev2", "started_at": "2024-05-02T09:00:00Z", "resolved_at": "2024-05-02T10:30:00Z"},
+
+    {"label": "Decision", "id": "decision:use-grpc", "name": "Use gRPC for internal service calls", "source_url": "synthetic", "synthetic": true, "status": "accepted", "context": "Chosen over REST for lower latency and strong typing between services.", "decided_at": "2023-01-15T00:00:00Z"},
+
+    {"label": "Doc", "id": "doc:cartservice-runbook", "name": "cartservice on-call runbook", "source_url": "synthetic", "synthetic": true, "kind": "runbook", "body": "If cartservice latency spikes, check Redis connection pool size first."}
+  ],
+  "edges": [
+    {"type": "DEPENDS_ON", "source": "svc:frontend", "target": "svc:cartservice", "synthetic": false, "weight": 1.0},
+    {"type": "DEPENDS_ON", "source": "svc:frontend", "target": "svc:productcatalogservice", "synthetic": false, "weight": 1.0},
+    {"type": "DEPENDS_ON", "source": "svc:checkoutservice", "target": "svc:cartservice", "synthetic": false, "weight": 1.0},
+    {"type": "DEPENDS_ON", "source": "svc:checkoutservice", "target": "svc:paymentservice", "synthetic": false, "weight": 1.0},
+    {"type": "DEPENDS_ON", "source": "svc:checkoutservice", "target": "svc:productcatalogservice", "synthetic": false, "weight": 1.0},
+
+    {"type": "CONTAINS", "source": "repo:GoogleCloudPlatform/microservices-demo", "target": "file:src/cartservice/src/CartService.cs", "synthetic": false},
+    {"type": "CONTAINS", "source": "svc:cartservice", "target": "file:src/cartservice/src/CartService.cs", "synthetic": false},
+
+    {"type": "AUTHORED", "source": "person:alice", "target": "pr:234", "synthetic": false},
+    {"type": "TOUCHED", "source": "pr:234", "target": "file:src/cartservice/src/CartService.cs", "synthetic": false, "additions": 42, "deletions": 10},
+
+    {"type": "MENTIONS", "source": "issue:198", "target": "svc:cartservice", "synthetic": false},
+
+    {"type": "OWNS", "source": "team:payments", "target": "svc:cartservice", "synthetic": true, "role": "primary"},
+    {"type": "OWNS", "source": "team:payments", "target": "svc:paymentservice", "synthetic": true, "role": "primary"},
+    {"type": "MEMBER_OF", "source": "person:alice", "target": "team:payments", "synthetic": true, "since": "2022-03-01T00:00:00Z"},
+    {"type": "MEMBER_OF", "source": "person:bob", "target": "team:payments", "synthetic": true, "since": "2021-11-01T00:00:00Z"},
+
+    {"type": "CAUSED", "source": "incident:inc-003", "target": "svc:cartservice", "synthetic": true},
+    {"type": "AFFECTED", "source": "incident:inc-003", "target": "svc:checkoutservice", "synthetic": true},
+    {"type": "RESOLVED_BY", "source": "incident:inc-003", "target": "pr:234", "synthetic": true},
+
+    {"type": "DECIDED", "source": "decision:use-grpc", "target": "svc:cartservice", "synthetic": true},
+    {"type": "DECIDED", "source": "decision:use-grpc", "target": "svc:checkoutservice", "synthetic": true},
+    {"type": "CITES", "source": "incident:inc-003", "target": "decision:use-grpc", "synthetic": true},
+
+    {"type": "MENTIONS", "source": "doc:cartservice-runbook", "target": "svc:cartservice", "synthetic": true}
+  ]
+}
