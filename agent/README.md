@@ -1,7 +1,8 @@
 # agent/ — owner: lead
 
-Not built yet — next task after this skeleton. Will contain:
+- `llm.py` — provider abstraction (`LLM_PROVIDER=gemini|groq`). Gemini via `google-genai` native function calling; Groq (OpenAI-compatible) as fallback. Retries with backoff on 429; falls back Gemini → Groq automatically if `GROQ_API_KEY` is set and Gemini keeps 429ing.
+- `registry.py` — the 11 tools from `contracts/tools.md`, exposed as `TOOL_REGISTRY` (name → callable) and `TOOL_SCHEMAS` (JSON schema per tool, for LLM function calling). Currently backed by fixture-based stubs (`tests/fixtures/sample_graph.json`); auto-swaps to `graph.tools` the moment that module exists on `main` (no code change needed — see the import block at the top of the file). Also exposes `graph_neighborhood`/`graph_stats`, used by `api/main.py` for `GET /api/graph` and `GET /api/stats`.
+- `loop.py` — the agent loop. `run_ask(question, mode)` drives an LLM tool-calling loop (max 8 steps) for `POST /api/ask`; `mode="rag"` instead delegates to `rag_baseline.py`. `run_alert(service)` runs the fixed investigation playbook (`blast_radius → find_owners → find_experts → similar_incidents → trace_decision → create_incident_issue(dry_run) → answer`) for `POST /api/alert`. Both are generators yielding `contracts/api.md`'s SSE event shapes directly.
+- `rag_baseline.py` — graph-free `mode="rag"` comparison baseline: BM25 over issue/PR/doc text chunks, one LLM call, no tools.
 
-- Provider abstraction: `LLM_PROVIDER=gemini|groq` in `.env`. Gemini via `google-genai` SDK with native function calling; Groq (OpenAI-compatible tool calling) as fallback.
-- The agentic loop: takes a question, exposes every function in `contracts/tools.md` (via `graph.tools`) as an LLM tool, runs the call/result loop, yields events matching `contracts/api.md`'s SSE shape (`tool_call`, `tool_result`, `answer`, `error`) so `api/` can stream them directly.
-- The canned "alert investigation" flow for `POST /api/alert` (blast radius → owners → experts → similar incidents → decisions → draft note).
+Swap to real graph data: once `graph/` merges `graph/tools.py` onto `main`, nothing here needs to change — `registry.py` picks it up automatically. Set `TOOL_BACKEND=stub` in `.env` to force the fixture stubs even after that for isolated testing.
