@@ -110,7 +110,7 @@ def find_experts(service: str, days: int = 180) -> dict: ...
 ```
 
 ### `similar_incidents(service: str) -> dict`
-Past `Incident` nodes where `CAUSED` or `AFFECTED` points at this service (or at a service within 1 hop via `DEPENDS_ON`, to catch "similar neighborhood" incidents), most recent first.
+Top 5 past `Incident` nodes where `CAUSED` or `AFFECTED` points at this service (or at a service within 1 hop via `DEPENDS_ON`, to catch "similar neighborhood" incidents). Ranked same-service incidents first, then downstream-neighbor incidents, most recent first within each group. Only the 5 kept incidents' nodes/edges appear in `path` — not every incident the underlying query touched.
 
 ```python
 def similar_incidents(service: str) -> dict: ...

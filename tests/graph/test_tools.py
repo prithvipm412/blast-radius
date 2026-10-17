@@ -56,6 +56,47 @@ def test_incidents(graph):
     )
 
 
+def test_similar_incidents_ranked_and_capped(graph):
+    same_service = [("incident:same-0", "2020-01-01T00:00:00Z"),
+                     ("incident:same-1", "2020-02-01T00:00:00Z"),
+                     ("incident:same-2", "2020-03-01T00:00:00Z")]
+    downstream = [("incident:down-0", "2021-01-01T00:00:00Z"),
+                  ("incident:down-1", "2021-02-01T00:00:00Z"),
+                  ("incident:down-2", "2021-03-01T00:00:00Z")]
+    for id_, started in same_service:
+        graph.query(
+            "CREATE (i:Incident {id:$id, name:$id, synthetic:true, source_url:'synthetic', "
+            "severity:'sev3', started_at:$started}) "
+            "WITH i MATCH (s:Service {id:'svc:cartservice'}) "
+            "CREATE (i)-[:CAUSED {synthetic:true}]->(s)",
+            {"id": id_, "started": started},
+        )
+    for id_, started in downstream:
+        graph.query(
+            "CREATE (i:Incident {id:$id, name:$id, synthetic:true, source_url:'synthetic', "
+            "severity:'sev3', started_at:$started}) "
+            "WITH i MATCH (s:Service {id:'svc:frontend'}) "
+            "CREATE (i)-[:AFFECTED {synthetic:true}]->(s)",
+            {"id": id_, "started": started},
+        )
+    all_ids = [id_ for id_, _ in same_service + downstream]
+    try:
+        result = tools.similar_incidents("cartservice")
+        data = check(result)
+        # inc-003 (fixture, CAUSED, 2024) outranks all 3 injected same-service incidents by
+        # recency; same-service always outranks downstream, so exactly 1 of the 3 downstream
+        # incidents (the most recent) fills the last of 5 slots.
+        assert [i["id"] for i in data["incidents"]] == [
+            "incident:inc-003", "incident:same-2", "incident:same-1",
+            "incident:same-0", "incident:down-2",
+        ]
+        kept_ids = {i["id"] for i in data["incidents"]}
+        path_incident_ids = {n["id"] for n in result["path"]["nodes"] if n["label"] == "Incident"}
+        assert path_incident_ids == kept_ids
+    finally:
+        graph.query("MATCH (n) WHERE n.id IN $ids DETACH DELETE n", {"ids": all_ids})
+
+
 def test_decisions(graph):
     result = tools.trace_decision("cartservice")
     assert check(result)["decisions"][0]["id"] == "decision:use-grpc"

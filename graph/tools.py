@@ -103,29 +103,42 @@ def find_experts(service: str, days: int = 180) -> dict:
 
 
 def similar_incidents(service: str) -> dict:
-    """Find incidents on this service or a one-hop dependency neighbor, newest first."""
-    rows, evidence, params = _service_query(q.INCIDENTS, service)
-    incidents = {}
+    """Top 5 incidents on this service or a one-hop dependency neighbor: same-service
+    incidents first, then downstream-neighbor incidents, most recent first within each
+    group. Only the 5 kept incidents' nodes/edges are added to the returned path - not
+    every incident the underlying query happened to touch."""
+    rows, _, params = _service_query(q.INCIDENTS, service)
+    root = rows[0][0]
+    best: dict[str, tuple] = {}
     for _, neighborhood, path in rows:
         if path is None:
             continue
         incident = path.first_node().properties
         relation = path.edges()[0].relation
-        priority = (neighborhood.edge_count(), relation != "CAUSED")
-        if incident["id"] not in incidents or priority < incidents[incident["id"]][0]:
-            incidents[incident["id"]] = (
-                priority,
-                {
-                    **{k: incident.get(k) for k in ("id", "name", "severity", "started_at")},
-                    "relation": relation,
-                },
-            )
-    result = sorted(
-        (v[1] for v in incidents.values()),
-        key=lambda i: (i["started_at"] or "", i["id"]),
-        reverse=True,
-    )
-    return _result({"incidents": result}, q.INCIDENTS, params, evidence)
+        same_service = neighborhood.edge_count() == 0
+        rank = (0 if same_service else 1, incident.get("started_at") or "")
+        current = best.get(incident["id"])
+        if current is None or rank < current[0]:
+            best[incident["id"]] = (rank, relation, path)
+
+    # Stable two-pass sort: most-recent-first within each group, then same-service-first
+    # across groups - a single sort can't mix an ascending and a descending key cleanly.
+    by_recency = sorted(best.values(), key=lambda v: v[0][1], reverse=True)
+    top5 = sorted(by_recency, key=lambda v: v[0][0])[:5]
+
+    evidence = Evidence()
+    evidence.add(root)
+    incidents = []
+    for _, relation, path in top5:
+        evidence.add(path)
+        incident = path.first_node().properties
+        incidents.append(
+            {
+                **{k: incident.get(k) for k in ("id", "name", "severity", "started_at")},
+                "relation": relation,
+            }
+        )
+    return _result({"incidents": incidents}, q.INCIDENTS, params, evidence)
 
 
 def trace_decision(service: str) -> dict:
