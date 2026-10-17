@@ -1,4 +1,4 @@
-export type NodeLabel = 'Service' | 'Person' | 'Team' | 'Repo' | 'File' | 'PR' | 'Issue' | 'Incident' | 'Decision' | 'Doc';
+export type NodeLabel = 'Service' | 'Person' | 'Team' | 'Repo' | 'File' | 'Commit' | 'PR' | 'Issue' | 'Incident' | 'Decision' | 'Doc';
 export type EdgeType = 'DEPENDS_ON' | 'OWNS' | 'MEMBER_OF' | 'AUTHORED' | 'TOUCHED' | 'CONTAINS' | 'CAUSED' | 'AFFECTED' | 'RESOLVED_BY' | 'DECIDED' | 'CITES' | 'MENTIONS';
 export interface GraphNode { id: string; label: NodeLabel; name: string; synthetic: boolean; source_url?: string; [property: string]: unknown }
 export interface GraphEdge { source: string; target: string; type: EdgeType; synthetic: boolean; source_url?: string | null; [property: string]: unknown }

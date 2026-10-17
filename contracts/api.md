@@ -58,10 +58,12 @@ Simulates an alert firing on a service and runs the full canned investigation (b
 Fetch a neighborhood of the graph for visualization, independent of any agent run.
 
 **Query params**
-- `focus` (string, optional): node id to center on, e.g. `svc:cartservice`. If omitted, returns the whole graph (capped — see `graph/` implementation for a sane cap, e.g. 500 nodes).
-- `depth` (int, optional, default `2`): hops out from `focus`.
+- `focus` (string, optional): node id to center on, e.g. `svc:cartservice`. If omitted, behavior depends on `scope`.
+- `depth` (int, optional, default `2`): hops out from `focus`. Ignored if `focus` is omitted.
+- `scope` (`"overview"` | `"all"`, optional, default `"overview"`): only applies when `focus` is omitted. `"overview"` returns just `Service` nodes + `DEPENDS_ON` edges plus `Team` nodes + their `OWNS -> Service` edges (~12–20 nodes for the demo dataset) — the small, legible default view. `"all"` returns the previous behavior: the whole graph, capped (see `cap`).
+- `cap` (int, optional, default `500`): max nodes returned. Applies to `scope=all` and to a `focus` query (e.g. the frontend uses `cap=40` for a node-click neighborhood fetch to keep it legible); irrelevant for `scope=overview`, which is small enough to never need capping.
 
-**Example**: `GET /api/graph?focus=svc:cartservice&depth=2`
+**Examples**: `GET /api/graph` (default small overview) · `GET /api/graph?scope=all&cap=500` (everything) · `GET /api/graph?focus=svc:cartservice&depth=1&cap=40` (1-hop neighborhood, e.g. on node click)
 
 **Response**
 ```json

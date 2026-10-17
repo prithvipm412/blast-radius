@@ -70,9 +70,9 @@ async def alert(req: AlertRequest):
 
 
 @app.get("/api/graph")
-async def get_graph(focus: str | None = None, depth: int = 2):
+async def get_graph(focus: str | None = None, depth: int = 2, cap: int = 500, scope: str = "overview"):
     try:
-        return graph_neighborhood(focus=focus, depth=depth)
+        return graph_neighborhood(focus=focus, depth=depth, cap=cap, scope=scope)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

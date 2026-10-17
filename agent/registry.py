@@ -565,10 +565,26 @@ if _BACKEND == "stub":
             "path": _path([incident_id, sid], [caused_edge]),
         }
 
-    def graph_neighborhood(focus: str | None = None, depth: int = 2, cap: int = 500) -> dict:
+    def graph_neighborhood(
+        focus: str | None = None, depth: int = 2, cap: int = 500, scope: str = "overview"
+    ) -> dict:
         """Backs GET /api/graph. Not one of contracts/tools.md's 11 agent tools —
         a plain graph-read helper used directly by api/main.py."""
-        if focus is None:
+        if focus is None and scope == "overview":
+            service_ids = [n["id"] for n in _graph.nodes.values() if n["label"] == "Service"]
+            team_ids = [n["id"] for n in _graph.nodes.values() if n["label"] == "Team"]
+            node_ids = service_ids + team_ids
+            node_id_set = set(node_ids)
+            edges = [
+                e
+                for e in _graph.edges
+                if e["type"] in ("DEPENDS_ON", "OWNS")
+                and e["source"] in node_id_set
+                and e["target"] in node_id_set
+            ]
+            return _path(node_ids, edges)
+
+        if focus is None:  # scope == "all"
             node_ids = list(_graph.nodes.keys())[:cap]
             node_id_set = set(node_ids)
             edges = [e for e in _graph.edges if e["source"] in node_id_set and e["target"] in node_id_set]
@@ -617,13 +633,35 @@ else:
     # 11 agent tools, so graph.tools doesn't define them - read directly via graph.db/
     # graph.evidence instead, reusing the same operational-node filtering and node/edge
     # rendering graph/tools.py's own queries rely on.
-    def graph_neighborhood(focus: str | None = None, depth: int = 2, cap: int = 500) -> dict:
+    def graph_neighborhood(
+        focus: str | None = None, depth: int = 2, cap: int = 500, scope: str = "overview"
+    ) -> dict:
         from graph.db import get_graph
         from graph.evidence import Evidence
 
         g = get_graph()
         evidence = Evidence()
-        if focus is None:
+        if focus is None and scope == "overview":
+            # The legible default: just Service/DEPENDS_ON plus Team/OWNS->Service -
+            # ~12-20 nodes for the demo dataset, not the whole graph. The (s:Service)
+            # label constraint on OWNS keeps this from pulling in CODEOWNERS Team/
+            # Person -> File ownership edges, which vastly outnumber Team -> Service.
+            rows = g.query(
+                "MATCH (s:Service) "
+                "OPTIONAL MATCH dep=(s)-[:DEPENDS_ON]->(:Service) "
+                "OPTIONAL MATCH own=(:Team)-[:OWNS]->(s) "
+                "RETURN s, dep, own",
+                {},
+            ).result_set
+            for s, dep, own in rows:
+                evidence.add(s)
+                if dep is not None:
+                    evidence.add(dep)
+                if own is not None:
+                    evidence.add(own)
+            return evidence.render()
+
+        if focus is None:  # scope == "all"
             # cap bounds the rendered node count itself, not a seed set to expand from -
             # take the first `cap` nodes, then only edges strictly within that set.
             nodes = g.query(
