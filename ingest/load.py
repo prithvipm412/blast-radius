@@ -4,7 +4,6 @@ import importlib
 import json
 import os
 from datetime import datetime, timezone
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -112,11 +111,11 @@ def load_all(reset=False):
             g.delete()
         counts = persist(records, writer)
         report = inspect_graph(g)
+        save_snapshot(snapshot)
         writer.set_sync_meta(started,
                              last_synced_commit_sha=snapshot['commits'][0]['detail']['sha'],
                              last_synced_issue_number=max((r['detail']['number'] for r in
                                  snapshot['issues'] + snapshot['pulls']), default=0))
-        save_snapshot(snapshot)
         return dict(status='ok', started_at=started, finished_at=utcnow(), **counts, **report,
                     missing_synthetic_artifacts=missing)
     finally:

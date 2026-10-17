@@ -1,13 +1,13 @@
 """Deterministic demo narratives; no invented memberships for real people."""
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from ingest.transform import DATA
 
 
 def populate(out, now=None):
     spec = json.loads((DATA / 'synthetic_layer.json').read_text())
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.fromisoformat(spec['as_of'].replace('Z', '+00:00'))
     stamp = lambda d: d.isoformat(timespec='seconds').replace('+00:00', 'Z')
     dependencies = json.loads((DATA / 'services.json').read_text())['dependencies']
     touched = {}
