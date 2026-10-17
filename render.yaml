@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: blast-radius-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: .
+    buildCommand: "pip install -r requirements.txt -r graph/requirements.txt"
+    startCommand: "uvicorn api.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+
+      # --- FalkorDB Cloud (copy from your existing instance; see DEPLOY.md) ---
+      - key: FALKORDB_HOST
+        sync: false
+      - key: FALKORDB_PORT
+        sync: false
+      - key: FALKORDB_USERNAME
+        sync: false
+      - key: FALKORDB_PASSWORD
+        sync: false
+      - key: FALKORDB_GRAPH
+        value: blast_radius
+
+      # --- LLM provider ---
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+
+      # --- GitHub (ingest + create_incident_issue real filing) ---
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_REPO
+        value: GoogleCloudPlatform/microservices-demo
+      - key: GITHUB_ISSUE_REPO
+        sync: false
+
+      # --- CORS: set to your Vercel frontend's URL once you have it, redeploy after ---
+      - key: CORS_ORIGINS
+        sync: false

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -25,9 +26,16 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Blast Radius API")
 
+# Comma-separated, e.g. "https://blast-radius.vercel.app,http://localhost:3001". Falls back
+# to the local dev ports so `uvicorn api.main:app` keeps working out of the box.
+_cors_origins = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -36,6 +44,15 @@ app.add_middleware(
 @app.get("/")
 async def root():
     return {"service": "blast-radius-api", "status": "ok"}
+
+
+@app.get("/api/health")
+async def health():
+    """Liveness check: no DB round-trip, so it stays fast even on a cold Render instance
+    and isn't a false negative if FalkorDB Cloud has a transient issue. Render polls this;
+    the frontend also uses a slow response from here (or anything else) past ~5s as the
+    signal to show "Waking up the graph…" instead of treating it as an error."""
+    return {"status": "ok"}
 
 
 class AskRequest(BaseModel):

@@ -4,7 +4,20 @@ Owner: **lead only**. Implemented in `api/` (lead). `web/` (Codex 3) consumes th
 
 Base URL in dev: `http://localhost:8000` (`API_HOST`/`API_PORT` in `.env`). Frontend reads `NEXT_PUBLIC_API_URL`.
 
+CORS allowed origins come from the `CORS_ORIGINS` env var (comma-separated), defaulting to `http://localhost:3000,http://localhost:3001` when unset. In deployment (see `DEPLOY.md`), set it to the frontend's real origin.
+
 All endpoints are prefixed `/api`.
+
+---
+
+## `GET /api/health`
+
+Liveness check — no DB round-trip, so it stays fast even on a cold instance (e.g. Render free tier waking from sleep) and isn't a false negative on a transient FalkorDB blip. Used by Render's own health check and by the frontend's "the backend might be asleep" detection (see `DEPLOY.md` item 3).
+
+**Response**
+```json
+{"status": "ok"}
+```
 
 ---
 
