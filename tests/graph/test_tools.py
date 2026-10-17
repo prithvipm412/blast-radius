@@ -25,7 +25,9 @@ def test_search(graph):
 def test_blast(graph):
     result = tools.blast_radius("cartservice")
     assert {n["id"]: n["depth"] for n in check(result)["affected"]} == {
-        "svc:frontend": 1, "svc:checkoutservice": 1}
+        "svc:frontend": 1,
+        "svc:checkoutservice": 1,
+    }
     assert {e["target"] for e in result["path"]["edges"]} == {"svc:cartservice"}
     assert check(tools.blast_radius("cartservice", 0))["affected"] == []
     assert check(tools.blast_radius("frontend"))["affected"] == []
@@ -33,8 +35,14 @@ def test_blast(graph):
 
 def test_experts(graph):
     result = tools.find_experts("cartservice", days=10000)
-    assert check(result)["experts"] == [{"id": "person:alice", "name": "Alice Nguyen",
-        "pr_count": 1, "last_touched": "2024-05-01T12:00:00Z"}]
+    assert check(result)["experts"] == [
+        {
+            "id": "person:alice",
+            "name": "Alice Nguyen",
+            "pr_count": 1,
+            "last_touched": "2024-05-01T12:00:00Z",
+        }
+    ]
     assert "pr:234" in {n["id"] for n in result["path"]["nodes"]}
     assert check(tools.find_experts("cartservice", days=0))["experts"] == []
 
@@ -43,7 +51,9 @@ def test_incidents(graph):
     result = tools.similar_incidents("cartservice")
     assert check(result)["incidents"][0]["relation"] == "CAUSED"
     assert len(result["data"]["incidents"]) == 1
-    assert check(tools.similar_incidents("paymentservice"))["incidents"][0]["relation"] == "AFFECTED"
+    assert (
+        check(tools.similar_incidents("paymentservice"))["incidents"][0]["relation"] == "AFFECTED"
+    )
 
 
 def test_decisions(graph):
@@ -52,8 +62,9 @@ def test_decisions(graph):
     assert "incident:inc-003" in {n["id"] for n in result["path"]["nodes"]}
 
 
-@pytest.mark.parametrize("fn", [tools.blast_radius, tools.find_experts,
-                                 tools.similar_incidents, tools.trace_decision])
+@pytest.mark.parametrize(
+    "fn", [tools.blast_radius, tools.find_experts, tools.similar_incidents, tools.trace_decision]
+)
 def test_unknown(graph, fn):
     with pytest.raises(ValueError, match="unknown service: no-such-service"):
         fn("no-such-service")
@@ -76,10 +87,229 @@ def test_clusters(graph):
     assert len(result["path"]["edges"]) == 7
 
 
-@pytest.mark.parametrize("fn", [tools.critical_services, tools.single_points_of_failure, tools.team_clusters])
+@pytest.mark.parametrize(
+    "fn", [tools.critical_services, tools.single_points_of_failure, tools.team_clusters]
+)
 def test_fallback(graph, monkeypatch, fn):
     from graph import algorithms
+
     monkeypatch.setattr(algorithms, "_procedures", lambda graph: frozenset())
     result = fn()
     assert check(result)["method"] == "networkx-fallback"
     assert len(result["path"]["nodes"]) >= 5
+
+
+def test_owners(graph):
+    result = tools.find_owners("cartservice")
+    assert check(result)["team"]["id"] == "team:payments"
+    assert {m["id"] for m in result["data"]["members"]} == {"person:alice", "person:bob"}
+    assert len(result["path"]["edges"]) == 3
+    assert check(tools.find_owners("frontend")) == {"team": None, "members": []}
+
+
+def test_failure_path(graph):
+    result = tools.failure_path("cartservice", "frontend")
+    assert check(result) == {
+        "exists": True,
+        "hops": 1,
+        "path_ids": ["svc:cartservice", "svc:frontend"],
+    }
+    assert result["path"]["edges"][0]["source"] == "svc:frontend"
+    assert check(tools.failure_path("cartservice", "cartservice"))["hops"] == 0
+    with pytest.raises(ValueError, match="unknown service"):
+        tools.failure_path("bogus", "cartservice")
+
+
+def test_draft(graph, monkeypatch):
+    from graph import issues
+
+    monkeypatch.setattr(
+        issues, "_post_issue", lambda *args: pytest.fail("dry run contacted GitHub")
+    )
+    result = tools.create_incident_issue("cartservice", "Test outage ' $param //")
+    data = check(result)
+    assert data["dry_run"] and data["url"] == "draft"
+    for section in ("Blast radius", "Owners", "Experts", "Similar incidents", "Decision context"):
+        assert "## " + section in data["body"]
+    assert "https://github.com/" in data["body"]
+    assert "synthetic; no external source" in data["body"]
+    row = graph.query(
+        "MATCH (i:Incident {id:$id})-[e:CAUSED]->(s) RETURN i, e, s", {"id": data["incident_id"]}
+    ).result_set[0]
+    assert row[0].properties["synthetic"] is True
+    assert row[1].properties["synthetic"] is True
+    graph.query(
+        "MATCH (n) WHERE n.id IN $ids DETACH DELETE n",
+        {"ids": [data["incident_id"], data["issue_id"]]},
+    )
+
+
+def test_filing_guards(graph, monkeypatch):
+    monkeypatch.delenv("GITHUB_ISSUE_REPO", raising=False)
+    with pytest.raises(ValueError, match="GITHUB_ISSUE_REPO"):
+        tools.create_incident_issue("cartservice", "outage", False)
+    monkeypatch.setenv("GITHUB_ISSUE_REPO", "GoogleCloudPlatform/microservices-demo")
+    with pytest.raises(ValueError, match="upstream"):
+        tools.create_incident_issue("cartservice", "outage", False)
+
+
+def test_filing_mocked(graph, monkeypatch):
+    from graph import issues
+
+    monkeypatch.setenv("GITHUB_ISSUE_REPO", "demo-owner/incident-test")
+    monkeypatch.setenv("GITHUB_TOKEN", "test-token")
+    calls = []
+
+    def post(repo, token, title, body):
+        calls.append(repo)
+        return 987654, "https://github.com/demo-owner/incident-test/issues/987654"
+
+    monkeypatch.setattr(issues, "_post_issue", post)
+    result = tools.create_incident_issue("cartservice", "outage", False)
+    assert check(result)["issue_id"] == "issue:987654"
+    assert calls == ["demo-owner/incident-test"]
+    graph.query(
+        "MATCH (n) WHERE n.id IN $ids DETACH DELETE n",
+        {"ids": [result["data"]["incident_id"], result["data"]["issue_id"]]},
+    )
+
+
+def test_schema_idempotent(graph):
+    from graph.schema import ensure_schema
+
+    ensure_schema(graph)
+    ensure_schema(graph)
+    assert len(graph.list_constraints()) == 12
+
+
+def test_mcp_schema():
+    import asyncio
+    import inspect
+
+    from graph.mcp_server import TOOL_NAMES, mcp
+
+    registered = asyncio.run(mcp.list_tools())
+    assert {t.name for t in registered} == set(TOOL_NAMES)
+    for tool in registered:
+        signature = inspect.signature(getattr(tools, tool.name))
+        assert set(tool.inputSchema["properties"]) == set(signature.parameters)
+        for name, param in signature.parameters.items():
+            if param.default is not inspect.Parameter.empty:
+                assert tool.inputSchema["properties"][name]["default"] == param.default
+
+
+def test_multihop_cycle_and_distinct_prs(graph):
+    graph.query(
+        "MATCH (a:Service {id:$a}), (b:Service {id:$b}) "
+        "CREATE (a)-[:DEPENDS_ON {synthetic:false}]->(b)",
+        {"a": "svc:cartservice", "b": "svc:paymentservice"},
+    )
+    try:
+        result = tools.blast_radius("paymentservice", 2)
+        affected = {n["id"]: n["depth"] for n in result["data"]["affected"]}
+        assert affected == {"svc:cartservice": 1, "svc:checkoutservice": 1, "svc:frontend": 2}
+        assert "svc:frontend" not in {
+            n["id"] for n in tools.blast_radius("paymentservice", 1)["data"]["affected"]
+        }
+        path = tools.failure_path("paymentservice", "frontend")
+        assert path["data"]["path_ids"] == ["svc:paymentservice", "svc:cartservice", "svc:frontend"]
+    finally:
+        graph.query(
+            "MATCH (a {id:$a})-[e:DEPENDS_ON]->(b {id:$b}) DELETE e",
+            {"a": "svc:cartservice", "b": "svc:paymentservice"},
+        )
+
+
+def test_errors_are_not_fallback(monkeypatch):
+    from graph import algorithms
+
+    monkeypatch.setattr(algorithms, "get_graph", lambda: object())
+    monkeypatch.setattr(algorithms, "_procedures", lambda graph: {"algo.pageRank"})
+
+    def broken(*args):
+        raise RuntimeError("query failed")
+
+    with pytest.raises(RuntimeError, match="query failed"):
+        algorithms.run_algorithm("pagerank", broken, tools._result, tools.CAP)
+
+
+def test_mcp_stdio(graph):
+    import asyncio
+    import os
+    import sys
+
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+
+    async def exercise():
+        params = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "graph.mcp_server"],
+            env={**os.environ, "FALKORDB_GRAPH": "blast_radius_test"},
+        )
+        async with (
+            stdio_client(params) as (read, write),
+            ClientSession(read, write) as session,
+        ):
+            await session.initialize()
+            registered = await session.list_tools()
+            assert len(registered.tools) == 11
+            result = await session.call_tool("blast_radius", {"service": "cartservice"})
+            assert not result.isError
+            assert check(result.structuredContent)["root"] == "svc:cartservice"
+
+    asyncio.run(exercise())
+
+
+def test_warm_latency(graph):
+    from statistics import median
+    from time import perf_counter
+
+    calls = {
+        "search_entities": lambda: tools.search_entities("cart"),
+        "blast_radius": lambda: tools.blast_radius("cartservice"),
+        "failure_path": lambda: tools.failure_path("cartservice", "frontend"),
+        "find_owners": lambda: tools.find_owners("cartservice"),
+        "find_experts": lambda: tools.find_experts("cartservice", 10000),
+        "similar_incidents": lambda: tools.similar_incidents("cartservice"),
+        "trace_decision": lambda: tools.trace_decision("cartservice"),
+        "critical_services": tools.critical_services,
+        "single_points_of_failure": tools.single_points_of_failure,
+        "team_clusters": tools.team_clusters,
+        "create_incident_issue": lambda: tools.create_incident_issue("cartservice", "Latency test"),
+    }
+    timings = {}
+    for name, call in calls.items():
+        samples = []
+        for _ in range(3):
+            start = perf_counter()
+            result = call()
+            samples.append((perf_counter() - start) * 1000)
+            if name == "create_incident_issue":
+                graph.query(
+                    "MATCH (n) WHERE n.id IN $ids DETACH DELETE n",
+                    {"ids": [result["data"]["incident_id"], result["data"]["issue_id"]]},
+                )
+        timings[name] = round(median(samples), 1)
+    print("warm median milliseconds:", json.dumps(timings, sort_keys=True))
+    # Network latency is external; report rather than make correctness tests flaky.
+
+
+def test_disconnected_path(graph):
+    graph.query(
+        "CREATE (s:Service {id:$id, name:$name, synthetic:$synthetic, source_url:$url})",
+        {"id": "svc:isolated", "name": "isolated", "synthetic": True, "url": "synthetic"},
+    )
+    try:
+        result = tools.failure_path("cartservice", "isolated")
+        assert check(result) == {"exists": False, "hops": None, "path_ids": []}
+        assert len(result["path"]["nodes"]) == 2
+        assert result["path"]["edges"] == []
+    finally:
+        graph.query("MATCH (s:Service {id:$id}) DETACH DELETE s", {"id": "svc:isolated"})
+
+
+def test_criticality_stored(graph):
+    ranked = tools.critical_services()["data"]["ranked"]
+    stored = dict(graph.query("MATCH (s:Service) RETURN s.id, s.criticality", {}).result_set)
+    assert stored == {row["id"]: row["score"] for row in ranked}

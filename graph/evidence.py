@@ -6,8 +6,12 @@ from falkordb.path import Path
 
 
 def node_dict(node):
-    return {"id": node.properties["id"], "label": node.labels[0],
-            "name": node.properties["name"], "synthetic": node.properties["synthetic"]}
+    return {
+        "id": node.properties["id"],
+        "label": node.labels[0],
+        "name": node.properties["name"],
+        "synthetic": node.properties["synthetic"],
+    }
 
 
 class Evidence:
@@ -17,9 +21,11 @@ class Evidence:
 
     def add(self, value):
         if isinstance(value, Node):
-            self.nodes[value.id] = value
+            if not value.properties.get("operational", False):
+                self.nodes[value.id] = value
         elif isinstance(value, Edge):
-            self.edges[value.id] = value
+            if not value.properties.get("operational", False):
+                self.edges[value.id] = value
         elif isinstance(value, Path):
             self.add(value.nodes())
             self.add(value.edges())
@@ -33,9 +39,17 @@ class Evidence:
         for e in self.edges.values():
             src = e.src_node.id if isinstance(e.src_node, Node) else e.src_node
             dst = e.dest_node.id if isinstance(e.dest_node, Node) else e.dest_node
+            if src not in self.nodes or dst not in self.nodes:
+                continue
             source, target = self.nodes[src].properties["id"], self.nodes[dst].properties["id"]
             key = (source, target, e.relation)
-            edges[key] = {"source": source, "target": target, "type": e.relation,
-                          "synthetic": e.properties["synthetic"]}
-        return {"nodes": [nodes[k] for k in sorted(nodes)],
-                "edges": [edges[k] for k in sorted(edges)]}
+            edges[key] = {
+                "source": source,
+                "target": target,
+                "type": e.relation,
+                "synthetic": e.properties["synthetic"],
+            }
+        return {
+            "nodes": [nodes[k] for k in sorted(nodes)],
+            "edges": [edges[k] for k in sorted(edges)],
+        }

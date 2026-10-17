@@ -14,10 +14,12 @@ def _procedures(graph):
 
 def run_algorithm(kind, run, result, cap):
     graph = get_graph()
-    names = {"pagerank": "algo.pageRank", "betweenness": "algo.betweenness",
-             "clusters": "algo.labelPropagation"}
-    queries = {"pagerank": q.PAGERANK, "betweenness": q.BETWEENNESS,
-               "clusters": q.COMMUNITIES}
+    names = {
+        "pagerank": "algo.pageRank",
+        "betweenness": "algo.betweenness",
+        "clusters": "algo.labelPropagation",
+    }
+    queries = {"pagerank": q.PAGERANK, "betweenness": q.BETWEENNESS, "clusters": q.COMMUNITIES}
     params = {"limit": cap + 1}
     if names[kind] in _procedures(graph):
         query = queries[kind]
@@ -49,7 +51,15 @@ def run_algorithm(kind, run, result, cap):
             scores = nx.betweenness_centrality(projection, normalized=False)
         else:
             groups = nx.community.asyn_lpa_communities(projection.to_undirected(), seed=42)
-            scores = {node: i for i, group in enumerate(sorted(map(sorted, groups))) for node in group}
+            scores = {
+                node: i for i, group in enumerate(sorted(map(sorted, groups))) for node in group
+            }
+        if kind == "pagerank":
+            query = q.STORE_CRITICALITY
+            params["scores"] = [
+                {"id": node, "score": float(score)} for node, score in scores.items()
+            ]
+            _, evidence = run(query, params)
         method = "networkx-fallback"
     nodes = {node.properties["id"]: node.properties for node in evidence.nodes.values()}
     if kind == "clusters":
@@ -63,12 +73,16 @@ def run_algorithm(kind, run, result, cap):
         clusters = []
         for i, members in enumerate(sorted(sorted(m) for m in groups.values())):
             counts = Counter(team for member in members for team in owners[member])
-            dominant = sorted(counts, key=lambda t: (-counts[t], t))[0] if counts else None
+            dominant = min(counts, key=lambda t: (-counts[t], t)) if counts else None
             clusters.append({"cluster_id": i, "services": members, "dominant_team": dominant})
         data = {"clusters": clusters}
     else:
-        data = {"ranked": [{"id": id_, "name": nodes[id_]["name"], "score": float(score)}
-                           for id_, score in sorted(scores.items(), key=lambda x: (-x[1], x[0]))]}
+        data = {
+            "ranked": [
+                {"id": id_, "name": nodes[id_]["name"], "score": float(score)}
+                for id_, score in sorted(scores.items(), key=lambda x: (-x[1], x[0]))
+            ]
+        }
     if method:
         data["method"] = method
     return result(data, query, params, evidence)

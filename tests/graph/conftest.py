@@ -47,13 +47,22 @@ def loaded_graph(sample_graph):
     assert graph.name == "blast_radius_test"
     graph.query("MATCH (n) DETACH DELETE n", {})
     for label, query in NODE_QUERIES.items():
-        nodes = [{k: v for k, v in n.items() if k != "label"}
-                 for n in sample_graph["nodes"] if n["label"] == label]
+        nodes = [
+            {k: v for k, v in n.items() if k != "label"}
+            for n in sample_graph["nodes"]
+            if n["label"] == label
+        ]
         graph.query(query, {"nodes": nodes})
     for relation, query in EDGE_QUERIES.items():
-        edges = [{"source": e["source"], "target": e["target"],
-                  "props": {k: v for k, v in e.items() if k not in ("source", "target", "type")}}
-                 for e in sample_graph["edges"] if e["type"] == relation]
+        edges = [
+            {
+                "source": e["source"],
+                "target": e["target"],
+                "props": {k: v for k, v in e.items() if k not in ("source", "target", "type")},
+            }
+            for e in sample_graph["edges"]
+            if e["type"] == relation
+        ]
         graph.query(query, {"edges": edges})
     yield graph
     assert graph.name == "blast_radius_test"
