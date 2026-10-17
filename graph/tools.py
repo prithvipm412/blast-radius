@@ -330,9 +330,12 @@ def failure_path(from_service: str, to_service: str) -> dict:
 
 
 def create_incident_issue(service: str, summary: str, dry_run: bool = True) -> dict:
-    """Draft a cited incident report and record it in FalkorDB; filing requires GITHUB_ISSUE_REPO.
+    """Draft a cited incident report; filing a real issue requires GITHUB_ISSUE_REPO.
 
-    Even dry runs write synthetic Incident/Issue nodes. Real filing never targets the upstream repo.
+    Dry runs (the default) are UI-only and never write to FalkorDB - the Incident/Issue
+    in `data` describe what a real filing would create, not a persisted node. Real filing
+    (dry_run=False) does write synthetic Incident/Issue nodes, and never targets the
+    upstream repo.
     """
     from graph.issues import create_issue
 

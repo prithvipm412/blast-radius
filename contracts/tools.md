@@ -166,7 +166,7 @@ def team_clusters() -> dict: ...
 ```
 
 ### `create_incident_issue(service: str, summary: str, dry_run: bool = True) -> dict`
-Creates (or, if `dry_run=True`, drafts without filing) a GitHub issue on the configured repo (`GITHUB_REPO` env var) summarizing the incident, and writes an `Incident` node + `CAUSED` edge into the graph either way (so the trace/UI has something to show even in dry-run). When `dry_run=False`, actually calls the GitHub API (needs `GITHUB_TOKEN`) and stores the real issue URL/number.
+Drafts (`dry_run=True`, the default) or files (`dry_run=False`) a GitHub issue on the configured repo (`GITHUB_ISSUE_REPO` env var) summarizing the incident. **Dry runs are UI-only and never write an `Incident`/`Issue` node to the graph** — `data` describes what a real filing would create, for the frontend to render (e.g. an `IssueCard`), not a persisted entity; `path` only carries the read-only investigation evidence. Only `dry_run=False` actually calls the GitHub API (needs `GITHUB_TOKEN`), stores the real issue URL/number, and writes the `Incident`/`Issue` nodes + `CAUSED` edge into the graph.
 
 ```python
 def create_incident_issue(service: str, summary: str, dry_run: bool = True) -> dict: ...

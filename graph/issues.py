@@ -131,12 +131,17 @@ def create_issue(service, summary, dry_run):
     }
     if number is not None:
         params["issue"]["number"] = number
-    _, written = tools._run(q.ISSUE, params)
-    # All read evidence plus the actual write; final Cypher describes the recorded action.
+    # Dry runs are UI-only: every "simulate alert" click used to leave a permanent
+    # Incident/Issue node behind, even when nothing was actually filed. Only a real
+    # filing (dry_run=False) is worth recording in the graph for future similar_incidents/
+    # trace lookups - a draft is just this response's data, rendered by the frontend's
+    # IssueCard, never written.
     combined = Evidence()
     combined.add(list(evidence.nodes.values()))
-    combined.add(list(written.nodes.values()))
-    combined.add(list(written.edges.values()))
+    if not dry_run:
+        _, written = tools._run(q.ISSUE, params)
+        combined.add(list(written.nodes.values()))
+        combined.add(list(written.edges.values()))
     path = combined.render()
     edges = {
         (e["source"], e["target"], e["type"]): e

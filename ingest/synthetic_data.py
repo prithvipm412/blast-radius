@@ -25,7 +25,7 @@ def populate(out, now=None):
                        team_kind='oncall', pager_channel=team['pager_channel'])
         for i in range(2):
             pid = out.node('Person', 'person:demo-' + team['slug'] + '-' + str(i + 1),
-                           team['name'] + ' engineer ' + str(i + 1), 'synthetic', True,
+                           team['name'] + ' on-call ' + str(i + 1), 'synthetic', True,
                            role='Synthetic on-call engineer')
             out.edge('MEMBER_OF', 'Person', pid, 'Team', tid, 'synthetic', True,
                      since='2025-10-01T00:00:00Z')

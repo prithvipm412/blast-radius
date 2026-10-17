@@ -259,15 +259,12 @@ def test_draft(graph, monkeypatch):
         assert "## " + section in data["body"]
     assert "https://github.com/" in data["body"]
     assert "synthetic; no external source" in data["body"]
-    row = graph.query(
-        "MATCH (i:Incident {id:$id})-[e:CAUSED]->(s) RETURN i, e, s", {"id": data["incident_id"]}
-    ).result_set[0]
-    assert row[0].properties["synthetic"] is True
-    assert row[1].properties["synthetic"] is True
-    graph.query(
-        "MATCH (n) WHERE n.id IN $ids DETACH DELETE n",
-        {"ids": [data["incident_id"], data["issue_id"]]},
-    )
+    # Dry runs are UI-only: must never leave a node behind in the graph.
+    assert graph.query(
+        "MATCH (n) WHERE n.id IN $ids RETURN n", {"ids": [data["incident_id"], data["issue_id"]]}
+    ).result_set == []
+    assert data["incident_id"] not in {n["id"] for n in result["path"]["nodes"]}
+    assert data["issue_id"] not in {n["id"] for n in result["path"]["nodes"]}
 
 
 def test_filing_guards(graph, monkeypatch):
