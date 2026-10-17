@@ -30,7 +30,11 @@ def get_client() -> FalkorDB:
 
 @lru_cache(maxsize=8)
 def _select_graph(name):
-    return get_client().select_graph(name)
+    from graph.schema import ensure_schema
+
+    graph = get_client().select_graph(name)
+    ensure_schema(graph)
+    return graph
 
 
 def get_graph(name: str | None = None):
