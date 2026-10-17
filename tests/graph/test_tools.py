@@ -103,8 +103,35 @@ def test_owners(graph):
     result = tools.find_owners("cartservice")
     assert check(result)["team"]["id"] == "team:payments"
     assert {m["id"] for m in result["data"]["members"]} == {"person:alice", "person:bob"}
+    assert len(result["data"]["teams"]) == 1
     assert len(result["path"]["edges"]) == 3
-    assert check(tools.find_owners("frontend")) == {"team": None, "members": []}
+    assert check(tools.find_owners("frontend")) == {"team": None, "members": [], "teams": []}
+
+
+def test_owners_multiple_teams(graph):
+    graph.query(
+        "CREATE (t:Team {id:$id, name:$name, synthetic:true, source_url:'synthetic'}) "
+        "WITH t MATCH (s:Service {id:'svc:cartservice'}) CREATE (t)-[:OWNS {synthetic:true}]->(s)",
+        {"id": "team:sre", "name": "SRE"},
+    )
+    graph.query(
+        "CREATE (p:Person {id:$id, name:$name, synthetic:true, source_url:'synthetic'}) "
+        "WITH p MATCH (t:Team {id:'team:sre'}) CREATE (p)-[:MEMBER_OF {synthetic:true}]->(t)",
+        {"id": "person:carol", "name": "Carol"},
+    )
+    try:
+        result = tools.find_owners("cartservice")
+        data = check(result)
+        assert {t["id"] for t in data["teams"]} == {"team:payments", "team:sre"}
+        sre = next(t for t in data["teams"] if t["id"] == "team:sre")
+        assert {m["id"] for m in sre["members"]} == {"person:carol"}
+        # Backward-compatible single-team fields still resolve deterministically (lowest id).
+        assert data["team"]["id"] == "team:payments"
+    finally:
+        graph.query(
+            "MATCH (n) WHERE n.id IN $ids DETACH DELETE n",
+            {"ids": ["team:sre", "person:carol"]},
+        )
 
 
 def test_failure_path(graph):
@@ -115,9 +142,24 @@ def test_failure_path(graph):
         "path_ids": ["svc:cartservice", "svc:frontend"],
     }
     assert result["path"]["edges"][0]["source"] == "svc:frontend"
+    assert "direction" not in result["data"]
     assert check(tools.failure_path("cartservice", "cartservice"))["hops"] == 0
     with pytest.raises(ValueError, match="unknown service"):
         tools.failure_path("bogus", "cartservice")
+
+
+def test_failure_path_undirected_fallback(graph):
+    # paymentservice and productcatalogservice share a dependent (checkoutservice) but
+    # neither depends on the other, so no directed incoming-chain exists either way.
+    result = tools.failure_path("paymentservice", "productcatalogservice")
+    data = check(result)
+    assert data == {
+        "exists": True,
+        "hops": 2,
+        "path_ids": ["svc:paymentservice", "svc:checkoutservice", "svc:productcatalogservice"],
+        "direction": "undirected",
+    }
+    assert len(result["path"]["edges"]) == 2
 
 
 def test_draft(graph, monkeypatch):

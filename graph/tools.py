@@ -171,25 +171,81 @@ def team_clusters() -> dict:
 
 
 def find_owners(service: str) -> dict:
-    """Find a service's owning team and its members, with ownership/membership evidence."""
+    """Find a service's owning team(s) and their members, with ownership/membership evidence.
+
+    A service may be owned by more than one team (e.g. primary + secondary OWNS). `data.teams`
+    lists every owning team with its own members. `data.team`/`data.members` stay single-team
+    shaped (the first owning team, by id) so existing single-team callers keep working unchanged.
+    """
     rows, evidence, params = _service_query(q.OWNERS, service)
-    teams, members = {}, {}
+    teams = {}
     for _, ownership, membership in rows:
         if ownership:
             props = ownership.first_node().properties
-            teams[props["id"]] = {"id": props["id"], "name": props["name"]}
+            teams.setdefault(props["id"], {"id": props["id"], "name": props["name"], "members": {}})
         if membership:
-            props = membership.first_node().properties
-            members[props["id"]] = {k: props.get(k) for k in ("id", "name", "github_login")}
-    if len(teams) > 1:
-        # TODO(lead): the contract permits primary/secondary OWNS but only one data.team.
-        raise NotImplementedError("find_owners contract needs a multiple-team selection rule")
-    return _result(
-        {"team": next(iter(teams.values()), None), "members": list(members.values())},
-        q.OWNERS,
-        params,
-        evidence,
-    )
+            person_props = membership.first_node().properties
+            team_props = membership.last_node().properties
+            entry = teams.setdefault(
+                team_props["id"],
+                {"id": team_props["id"], "name": team_props["name"], "members": {}},
+            )
+            entry["members"][person_props["id"]] = {
+                k: person_props.get(k) for k in ("id", "name", "github_login")
+            }
+    teams_list = [
+        {"id": t["id"], "name": t["name"], "members": list(t["members"].values())}
+        for t in sorted(teams.values(), key=lambda t: t["id"])
+    ]
+    primary = teams_list[0] if teams_list else None
+    data = {
+        "team": {"id": primary["id"], "name": primary["name"]} if primary else None,
+        "members": primary["members"] if primary else [],
+        "teams": teams_list,
+    }
+    return _result(data, q.OWNERS, params, evidence)
+
+
+def _undirected_failure_path(from_id, to_id):
+    """BFS over the Service/DEPENDS_ON subgraph ignoring edge direction.
+
+    FalkorDB doesn't support undirected shortestPath(), so this fetches the (small, capped)
+    subgraph as real node/edge objects and searches in Python - the returned nodes/edges are
+    the same FalkorDB objects graph.evidence.Evidence expects, so the rendered path stays
+    exact (only the nodes/edges actually on the path), not the whole subgraph.
+    """
+    rows, sub_evidence = _run(q.DEPENDS_EDGES, {"limit": CAP + 1})
+    node_by_id, adjacency, edge_by_pair = {}, {}, {}
+    for s_node, edge, t_node in rows:
+        sid, tid = s_node.properties["id"], t_node.properties["id"]
+        node_by_id[sid], node_by_id[tid] = s_node, t_node
+        adjacency.setdefault(sid, []).append(tid)
+        adjacency.setdefault(tid, []).append(sid)
+        edge_by_pair[(sid, tid)] = edge
+        edge_by_pair[(tid, sid)] = edge
+
+    prev = {from_id: None}
+    queue = [from_id]
+    while queue:
+        cur, queue = queue[0], queue[1:]
+        if cur == to_id:
+            break
+        for nxt in adjacency.get(cur, []):
+            if nxt not in prev:
+                prev[nxt] = cur
+                queue.append(nxt)
+    if to_id not in prev:
+        return None
+
+    ids, cur = [to_id], to_id
+    while prev[cur] is not None:
+        cur = prev[cur]
+        ids.append(cur)
+    ids.reverse()
+
+    path_nodes = [node_by_id[i] for i in ids]
+    path_edges = [edge_by_pair[(ids[i], ids[i + 1])] for i in range(len(ids) - 1)]
+    return ids, path_nodes, path_edges
 
 
 def failure_path(from_service: str, to_service: str) -> dict:
@@ -200,7 +256,7 @@ def failure_path(from_service: str, to_service: str) -> dict:
         "limit": 1,
     }
     rows, evidence = _run(q.FAILURE, params)
-    a, b, path, undirected_hops = rows[0]
+    a, b, path = rows[0]
     for node, original in ((a, from_service), (b, to_service)):
         if node is None:
             raise ValueError(f"unknown service: {original}")
@@ -211,14 +267,19 @@ def failure_path(from_service: str, to_service: str) -> dict:
         if ids[0] != a.properties["id"]:
             ids.reverse()
         data = {"exists": True, "hops": path.edge_count(), "path_ids": ids}
-    elif undirected_hops is None:
-        data = {"exists": False, "hops": None, "path_ids": []}
     else:
-        # TODO(lead): resolve 'either direction' vs 'incoming chain' before choosing
-        # between a false result and an undirected dependency path.
-        raise NotImplementedError(
-            "failure_path contract needs clarification when no incoming path exists"
-        )
+        # No directed incoming-dependency chain from a to b. They may still be connected
+        # when direction is ignored (e.g. two services share a common dependency) - fall
+        # back to an undirected path and say so explicitly via data["direction"], rather
+        # than either fabricating a directed claim or reporting a false negative.
+        fallback = _undirected_failure_path(a.properties["id"], b.properties["id"])
+        if fallback is None:
+            data = {"exists": False, "hops": None, "path_ids": []}
+        else:
+            ids, path_nodes, path_edges = fallback
+            evidence.add(path_nodes)
+            evidence.add(path_edges)
+            data = {"exists": True, "hops": len(ids) - 1, "path_ids": ids, "direction": "undirected"}
     return _result(data, q.FAILURE, params, evidence)
 
 

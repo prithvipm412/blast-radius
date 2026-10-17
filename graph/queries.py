@@ -66,8 +66,12 @@ RETURN s, ownership, membership ORDER BY t.id, person.id LIMIT $limit"""
 FAILURE = """OPTIONAL MATCH (a:Service {id: $from_service})
 OPTIONAL MATCH (b:Service {id: $to_service})
 WITH a, b, shortestPath((a)<-[:DEPENDS_ON*]-(b)) AS p
-OPTIONAL MATCH connected=(a)-[:DEPENDS_ON*]-(b)
-RETURN a, b, p, length(connected) LIMIT $limit"""
+RETURN a, b, p LIMIT $limit"""
+
+# FalkorDB doesn't support undirected shortestPath(), so the undirected fallback in
+# failure_path() fetches the whole Service/DEPENDS_ON subgraph as real node/edge objects
+# and runs BFS in Python instead - see graph/tools.py.
+DEPENDS_EDGES = "MATCH (s:Service)-[r:DEPENDS_ON]->(t:Service) RETURN s, r, t LIMIT $limit"
 
 ISSUE = """MATCH (s:Service {id: $service})
 CREATE (i:Incident) SET i = $incident

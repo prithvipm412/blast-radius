@@ -78,6 +78,8 @@ def failure_path(from_service: str, to_service: str) -> dict: ...
 ```
 If no path: `{"exists": false, "hops": null, "path_ids": []}`, `path.nodes`/`path.edges` still show the two endpoint nodes (no edges).
 
+If `from_service` has no directed incoming-dependency chain reaching `to_service` but the two are connected when direction is ignored (e.g. they share a common dependency), fall back to the undirected shortest path and say so explicitly rather than reporting a false negative: `{"exists": true, "hops": 2, "path_ids": [...], "direction": "undirected"}`. The `direction` key is only present in this fallback case — its absence means the path found was the normal directed one.
+
 ### `find_owners(service: str) -> dict`
 Walks `Team -[:OWNS]-> Service` then `Person -[:MEMBER_OF]-> Team`.
 
@@ -88,9 +90,13 @@ def find_owners(service: str) -> dict: ...
 ```json
 {
   "team": {"id": "team:payments", "name": "Payments"},
-  "members": [{"id": "person:alice", "name": "Alice", "github_login": "alice"}]
+  "members": [{"id": "person:alice", "name": "Alice", "github_login": "alice"}],
+  "teams": [
+    {"id": "team:payments", "name": "Payments", "members": [{"id": "person:alice", "name": "Alice", "github_login": "alice"}]}
+  ]
 }
 ```
+If a service is owned by more than one team (e.g. primary + secondary `OWNS`), `teams` lists every owning team with its own members (sorted by team id). `team`/`members` stay single-team shaped — the first owning team by id — so single-team callers keep working unchanged; callers that need every owning team should read `teams`.
 
 ### `find_experts(service: str, days: int = 180) -> dict`
 People who `AUTHORED` a `PR` that `TOUCHED` a `File` `CONTAINS`-ed by `service`, within the last `days` days (based on `PR.merged_at`), ranked by number of qualifying PRs descending.
