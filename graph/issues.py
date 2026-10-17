@@ -119,7 +119,10 @@ def create_issue(service, summary, dry_run):
         },
         "issue": {
             "id": issue_id,
-            "name": title,
+            # Distinct from the Incident node's full title (same incident, different
+            # purpose) - both previously got `title` verbatim and rendered as two
+            # identically-labeled graph nodes, looking like a duplicate.
+            "name": "Drafted issue" if dry_run else "Filed issue",
             "source_url": url,
             "synthetic": True,
             "body": markdown,

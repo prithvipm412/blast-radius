@@ -63,21 +63,25 @@ def blast_radius(service: str, max_depth: int = 4) -> dict:
     return _result(data, q.BLAST, params, evidence)
 
 
-def find_experts(service: str, days: int = 180) -> dict:
-    """Rank contributors by distinct recently merged PRs; path includes PR/file evidence and authors."""
-    if isinstance(days, bool) or not isinstance(days, int) or days < 0:
-        raise ValueError("days must be a nonnegative integer")
-    now = datetime.now(UTC)
-    stamp = lambda dt: dt.isoformat(timespec="seconds").replace("+00:00", "Z")
-    rows, evidence, params = _service_query(
-        q.EXPERTS, service, cutoff=stamp(now - timedelta(days=days)), now=stamp(now)
-    )
-    experts = {}
+_BOT_EXACT = {"renovate-bot", "dependabot", "github-actions"}
+
+
+def _is_bot(name: str | None) -> bool:
+    v = (name or "").lower()
+    return bool(v) and (v in _BOT_EXACT or v.endswith("[bot]") or v.endswith("-bot"))
+
+
+def _rank_experts(rows):
+    experts: dict[str, dict] = {}
+    kept_paths = []
     for _, path in rows:
         if path is None:
             continue
         _, _, pr, person = path.nodes()
         props, change = person.properties, pr.properties
+        if _is_bot(props.get("github_login")) or _is_bot(props.get("name")):
+            continue
+        kept_paths.append(path)
         entry = experts.setdefault(
             props["id"],
             {
@@ -89,16 +93,45 @@ def find_experts(service: str, days: int = 180) -> dict:
         )
         entry["prs"][change["id"]] = change
         entry["last_touched"] = max(entry["last_touched"], change["merged_at"])
-    ranked = [
-        {
-            "id": e["id"],
-            "name": e["name"],
-            "pr_count": len(e["prs"]),
-            "last_touched": e["last_touched"],
-        }
-        for e in experts.values()
-    ]
-    ranked.sort(key=lambda e: (-e["pr_count"], e["id"]))
+    ranked = sorted(
+        (
+            {
+                "id": e["id"],
+                "name": e["name"],
+                "pr_count": len(e["prs"]),
+                "last_touched": e["last_touched"],
+            }
+            for e in experts.values()
+        ),
+        key=lambda e: (-e["pr_count"], e["id"]),
+    )
+    return ranked, kept_paths
+
+
+def find_experts(service: str, days: int = 180) -> dict:
+    """Rank human contributors (automation accounts excluded) by distinct recently merged
+    PRs. If fewer than 3 humans turn up within `days`, widen to all-time rather than
+    reporting a near-empty, misleading result. Only the kept (human) PR/File evidence is
+    added to the returned path - not every PR the underlying query touched."""
+    if isinstance(days, bool) or not isinstance(days, int) or days < 0:
+        raise ValueError("days must be a nonnegative integer")
+    now = datetime.now(UTC)
+    stamp = lambda dt: dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+    rows, _, params = _service_query(
+        q.EXPERTS, service, cutoff=stamp(now - timedelta(days=days)), now=stamp(now)
+    )
+    root = rows[0][0]
+    ranked, kept_paths = _rank_experts(rows)
+    if len(ranked) < 3:
+        rows, _, params = _service_query(
+            q.EXPERTS, service, cutoff="0000-01-01T00:00:00Z", now=stamp(now)
+        )
+        ranked, kept_paths = _rank_experts(rows)
+
+    evidence = Evidence()
+    evidence.add(root)
+    for path in kept_paths:
+        evidence.add(path)
     return _result({"experts": ranked}, q.EXPERTS, params, evidence)
 
 

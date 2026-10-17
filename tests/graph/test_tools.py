@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 
 import pytest
 
@@ -44,7 +45,49 @@ def test_experts(graph):
         }
     ]
     assert "pr:234" in {n["id"] for n in result["path"]["nodes"]}
-    assert check(tools.find_experts("cartservice", days=0))["experts"] == []
+    # days=0 finds nobody in-window, but <3 humans triggers the all-time widen fallback,
+    # so alice still turns up rather than a misleadingly empty result.
+    assert check(tools.find_experts("cartservice", days=0))["experts"] == [
+        {"id": "person:alice", "name": "Alice Nguyen", "pr_count": 1, "last_touched": "2024-05-01T12:00:00Z"}
+    ]
+
+
+def test_experts_bot_filter_and_widen(graph):
+    # A bot-authored PR, merged "now" (always in-window) - must never count as an expert
+    # nor appear in evidence, and must not count toward the <3-humans widen threshold.
+    graph.query(
+        "CREATE (p:Person {id:'person:renovate-bot', name:'renovate-bot', synthetic:false, "
+        "source_url:'https://github.com/renovate-bot', github_login:'renovate-bot'})",
+        {},
+    )
+    now = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+    graph.query(
+        "CREATE (pr:PR {id:'pr:999', name:'Bump dep', source_url:'https://example/pr/999', "
+        "synthetic:false, number:999, merged_at:$now, body:''}) "
+        "WITH pr MATCH (f:File {id:'file:src/cartservice/src/CartService.cs'}) "
+        "CREATE (pr)-[:TOUCHED {synthetic:false, additions:1, deletions:1}]->(f) "
+        "WITH pr MATCH (p:Person {id:'person:renovate-bot'}) "
+        "CREATE (p)-[:AUTHORED {synthetic:false}]->(pr)",
+        {"now": now},
+    )
+    try:
+        # Narrow window: only the bot PR is "recent"; alice's 2024 PR is out of range. The
+        # bot doesn't satisfy the human quota, so this must widen to all-time and surface
+        # alice - not report the bot, and not report an empty list.
+        result = tools.find_experts("cartservice", days=1)
+        data = check(result)
+        assert data["experts"] == [
+            {"id": "person:alice", "name": "Alice Nguyen", "pr_count": 1,
+             "last_touched": "2024-05-01T12:00:00Z"}
+        ]
+        path_ids = {n["id"] for n in result["path"]["nodes"]}
+        assert "person:renovate-bot" not in path_ids
+        assert "pr:999" not in path_ids
+    finally:
+        graph.query(
+            "MATCH (n) WHERE n.id IN $ids DETACH DELETE n",
+            {"ids": ["person:renovate-bot", "pr:999"]},
+        )
 
 
 def test_incidents(graph):

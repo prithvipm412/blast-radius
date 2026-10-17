@@ -99,7 +99,7 @@ def find_owners(service: str) -> dict: ...
 If a service is owned by more than one team (e.g. primary + secondary `OWNS`), `teams` lists every owning team with its own members (sorted by team id). `team`/`members` stay single-team shaped — the first owning team by id — so single-team callers keep working unchanged; callers that need every owning team should read `teams`.
 
 ### `find_experts(service: str, days: int = 180) -> dict`
-People who `AUTHORED` a `PR` that `TOUCHED` a `File` `CONTAINS`-ed by `service`, within the last `days` days (based on `PR.merged_at`), ranked by number of qualifying PRs descending.
+Human contributors (bots excluded — `*[bot]`, `*-bot`, `renovate-bot`, `dependabot`, `github-actions`, matched case-insensitively against `github_login` and `name`) who `AUTHORED` a `PR` that `TOUCHED` a `File` `CONTAINS`-ed by `service`, within the last `days` days (based on `PR.merged_at`), ranked by number of qualifying PRs descending. If fewer than 3 humans turn up within `days`, widens to all-time rather than returning a near-empty result. `path` only includes the kept (human) PR/File evidence.
 
 ```python
 def find_experts(service: str, days: int = 180) -> dict: ...
