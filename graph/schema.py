@@ -1,7 +1,10 @@
 """Idempotent contract indexes and native FalkorDB UNIQUE constraints."""
 
+import logging
 from threading import Lock
 from time import monotonic, sleep
+
+logger = logging.getLogger(__name__)
 
 INDEXES = (
     ("Commit", "id", "CREATE INDEX FOR (n:Commit) ON (n.id)"),
@@ -67,5 +70,19 @@ def ensure_schema(graph):
             if len(statuses) == len(expected) and all(s == "OPERATIONAL" for s in statuses):
                 return
             if monotonic() > deadline:
-                raise TimeoutError("graph uniqueness constraints did not become operational")
+                # Indexes are already created above (point lookups stay fast either way),
+                # and every write goes through graph/writer.py's MERGE-on-id, which stays
+                # correct without the uniqueness constraint - it just won't reject a
+                # concurrent duplicate-id write as fast as a native constraint would.
+                # FalkorDB Cloud has been observed to leave constraints PENDING well past
+                # this deadline, so don't block startup/ingest on them; warn and continue.
+                pending = len(expected) - len(statuses)
+                logger.warning(
+                    "graph uniqueness constraints did not become operational within 5s "
+                    "(%d pending/missing of %d); continuing without them - writes stay "
+                    "idempotent via MERGE on id",
+                    pending,
+                    len(expected),
+                )
+                return
             sleep(0.02)

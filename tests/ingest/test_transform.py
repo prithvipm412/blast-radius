@@ -87,6 +87,28 @@ def test_writer_batches_and_nodes_before_edges():
     assert kinds.index('edge') > max(i for i, k in enumerate(kinds) if k == 'node')
 
 
+def test_commit_author_fallback_to_git_identity():
+    # GitHub couldn't link this commit's git author to an account (author: None,
+    # the common case for drive-by/unlinked-email contributors), but the raw git
+    # trailer (commit.author) always has name/email - that must still produce a
+    # real Person node instead of silently dropping authorship.
+    data = snapshot()
+    data['commits'].append({
+        'detail': {'sha': 'def', 'html_url': 'https://example/commit/def', 'author': None,
+                   'commit': {'message': 'Fix typo', 'author': {
+                       'name': 'Jane Doe', 'email': 'jane@example.com',
+                       'date': '2026-01-02T00:00:00Z'}}},
+        'files': [],
+    })
+    records = real(data)
+    person = records.nodes['Person']['person:email:jane@example.com']
+    assert person == {'id': 'person:email:jane@example.com', 'name': 'Jane Doe',
+                       'source_url': 'mailto:jane@example.com', 'synthetic': False,
+                       'github_login': None}
+    assert ('person:email:jane@example.com', 'commit:def') in records.edges[
+        'AUTHORED', 'Person', 'Commit']
+
+
 def test_codeowners_last_match_and_github_team():
     data = snapshot()
     data['codeowners'] = [{'path': '.github/CODEOWNERS', 'blob': {'content': base64.b64encode(

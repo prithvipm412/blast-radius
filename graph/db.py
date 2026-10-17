@@ -6,6 +6,8 @@ from threading import Lock
 
 from dotenv import load_dotenv
 from falkordb import FalkorDB
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry
 
 load_dotenv()
 _lock = Lock()
@@ -13,7 +15,14 @@ _client = None
 
 
 def get_client() -> FalkorDB:
-    """One connection pool per process, configured by FALKORDB_* in .env."""
+    """One connection pool per process, configured by FALKORDB_* in .env.
+
+    retry_on_error=[OSError] extends redis-py's connection-level Retry (which by
+    default only covers its own ConnectionError/TimeoutError) to also cover raw
+    socket errors - including socket.gaierror ("nodename nor servname provided"),
+    the intermittent DNS failure seen resolving FalkorDB Cloud hosts. Retries apply
+    per command, including the handshake on first connect, with exponential backoff.
+    """
     global _client
     with _lock:
         if _client is None:
@@ -24,6 +33,8 @@ def get_client() -> FalkorDB:
                 password=os.getenv("FALKORDB_PASSWORD") or None,
                 socket_connect_timeout=5,
                 socket_timeout=10,
+                retry_on_error=[OSError],
+                retry=Retry(ExponentialBackoff(cap=4.0, base=0.25), retries=4),
             )
     return _client
 

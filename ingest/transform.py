@@ -26,13 +26,28 @@ class Records:
         self.edges[kind, a_label, b_label][a, b] = dict(
             from_id=a, to_id=b, source_url=source_url, synthetic=synthetic, **props)
 
-    def person(self, user):
-        if not user or not user.get('login'):
-            return None
-        login = user['login']
-        return self.node('Person', 'person:' + login, login,
-                         user.get('html_url') or 'https://github.com/' + login,
-                         github_login=login)
+    def person(self, user, *, fallback_name=None, fallback_email=None):
+        """Resolve a GitHub user object to a Person node.
+
+        `user.login` is None whenever GitHub couldn't link the raw git author
+        identity to an account - common for drive-by/unlinked-email commits even
+        on a popular repo. Falling back to the raw git author name/email (passed
+        by the commit loop below) instead of dropping authorship silently is what
+        keeps Person counts realistic relative to actual commit/PR volume.
+        """
+        login = user.get('login') if user else None
+        if login:
+            return self.node('Person', 'person:' + login, login,
+                             user.get('html_url') or 'https://github.com/' + login,
+                             github_login=login)
+        if fallback_email:
+            return self.node('Person', 'person:email:' + fallback_email,
+                             fallback_name or fallback_email, 'mailto:' + fallback_email,
+                             github_login=None)
+        if fallback_name:
+            return self.node('Person', 'person:name:' + fallback_name, fallback_name,
+                             URL, github_login=None)
+        return None
 
     def counts(self):
         edges = defaultdict(int)
@@ -82,6 +97,7 @@ def real(snapshot):
     for label, key in [('PR', 'pulls'), ('Commit', 'commits')]:
         for record in snapshot.get(key, []):
             d = record['detail']
+            fallback_name = fallback_email = None
             if label == 'PR':
                 id = out.node(label, 'pr:' + str(d['number']), d['title'], d['html_url'],
                               number=d['number'], merged_at=d.get('merged_at'),
@@ -93,7 +109,12 @@ def real(snapshot):
                               d['html_url'], sha=d['sha'], message=message[:60000],
                               authored_at=d['commit']['author']['date'])
                 user = d.get('author')
-            person = out.person(user)
+                # commit.author is the matched GitHub account and is null whenever GitHub
+                # couldn't link the raw git author email to one; commit.commit.author (the
+                # raw git trailer) always has name/email regardless of account linkage.
+                fallback_name = d['commit']['author'].get('name')
+                fallback_email = d['commit']['author'].get('email')
+            person = out.person(user, fallback_name=fallback_name, fallback_email=fallback_email)
             if person:
                 out.edge('AUTHORED', 'Person', person, label, id, d['html_url'])
             for changed in record['files']:
