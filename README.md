@@ -2,7 +2,7 @@
 
 An on-call agent with a company brain — when a service fails, it traces the blast radius, finds owners and experts, surfaces past incidents and decisions, and drafts the incident issue, all over a FalkorDB knowledge graph.
 
-[**Live demo**](https://blast-radius-gray-two.vercel.app) · [**API**](https://blast-radius-api-nawe.onrender.com/api/health) · [**Demo video**](VIDEO_LINK) · Tracks: **01 — Agents That Act on Connected Data** + **03 — Company Brain**
+[**Live demo**](https://blast-radius-gray-two.vercel.app) · [**API**](https://blast-radius-api-nawe.onrender.com/api/health) · [**Demo video**](https://youtu.be/r24UHYV3JOQ) · Tracks: **01 — Agents That Act on Connected Data** + **03 — Company Brain**
 
 Built for **Graph Hacks** (WeMakeDevs x FalkorDB).
 
