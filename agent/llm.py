@@ -216,6 +216,9 @@ class GroqProvider(LLMProvider):
 
         def call():
             try:
+                # tool_choice must be the literal string "auto" (or omitted) - never an
+                # object (e.g. forcing a specific function) - or Groq's OpenAI-compatible
+                # API rejects the request with a 400.
                 return self.client.chat.completions.create(
                     model=self.model,
                     messages=groq_messages,
